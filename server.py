@@ -125,6 +125,16 @@ def _utan_hemliga(cfg):
     return rent
 
 
+def _rent(v):
+    """Tar bort blanksteg i kanterna av en miljövariabel.
+
+    Ett värde klistras lätt in med ett radbrott eller ett mellanslag på slutet.
+    I Render syns det inte, men det blev förut en del av nyckeln — och då
+    stämmer den aldrig när man skriver in den, hur noga man än kopierar.
+    """
+    return str(v).strip()
+
+
 def miljo_overstyrning():
     """Inställningar från miljövariabler.
 
@@ -140,14 +150,14 @@ def miljo_overstyrning():
                          ("program", "VVS_PROGRAM"), ("ansvarig", "VVS_ANSVARIG"),
                          ("deadline", "VVS_DEADLINE")):
         v = os.environ.get(namn)
-        if v:
-            ut[nyckel] = v
+        if v and _rent(v):
+            ut[nyckel] = _rent(v)
     ai = {}
     for nyckel, namn in (("nyckel", "VVS_AI_NYCKEL"), ("modell", "VVS_AI_MODELL"),
                          ("url", "VVS_AI_URL"), ("leverantor", "VVS_AI_LEVERANTOR")):
         v = os.environ.get(namn)
-        if v:
-            ai[nyckel] = v
+        if v and _rent(v):
+            ai[nyckel] = _rent(v)
     if ai:
         ut["ai"] = ai
     mejl = {}
@@ -156,8 +166,8 @@ def miljo_overstyrning():
                          ("smtp_port", "VVS_MEJL_SMTP_PORT"),
                          ("losenord", "VVS_MEJL_LOSENORD")):
         v = os.environ.get(namn)
-        if v:
-            mejl[nyckel] = v
+        if v and _rent(v):
+            mejl[nyckel] = _rent(v)
     if mejl:
         ut["mejl"] = mejl
     return ut
@@ -359,7 +369,8 @@ class Svar(BaseHTTPRequestHandler):
         cfg = las_config()
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         given = (q.get("t") or [None])[0] or self.headers.get("X-Token") or ""
-        return secrets.compare_digest(str(given), str(cfg.get("token") or "-"))
+        return secrets.compare_digest(str(given).strip(),
+                                      str(cfg.get("token") or "-").strip())
 
     def _logg(self, handling, text=""):
         try:
@@ -509,7 +520,8 @@ class Svar(BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         given = (q.get("t") or [None])[0] or self.headers.get("X-Token") or ""
         if not (self._lokal()
-                or secrets.compare_digest(str(given), str(cfg.get("token")))):
+                or secrets.compare_digest(str(given).strip(),
+                                          str(cfg.get("token")).strip())):
             self._fel(401, "ogiltig token")
             return
         stig = os.path.join(BILDER, namn)
