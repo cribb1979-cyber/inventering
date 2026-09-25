@@ -7,6 +7,7 @@ Två saker skiljer den här servern från de andra apparna i ~/:
   2) Bilder sparas och analyseras lokalt. Ingenting lämnar datorn.
 """
 import base64
+import io
 import json
 import os
 import re
@@ -25,6 +26,19 @@ import kalkyl
 import lager
 import stigar
 
+# QR-koden ritas med qrcode-paketet. Det är ren Python utan beroenden, men
+# ligger ändå inte i standardbiblioteket — och på en server är det bygget, inte
+# koden, som avgör om det finns. Vi prövar en gång vid start i stället för att
+# hoppas: går det inte, säger appen det rakt ut i stället för att visa en tom
+# ruta. Se också kontrollen i render.yaml, som stoppar bygget i stället.
+try:
+    import qrcode
+    import qrcode.image.svg
+    QR_OK = True
+except Exception as _qr_fel:                                     # noqa: BLE001
+    QR_OK = False
+    _QR_FEL = f"{type(_qr_fel).__name__}: {_qr_fel}"
+
 # Sökvägarna kommer från stigar.py, så att de går att flytta till en monterad
 # disk med VVS_DATA när appen kör i molnet.
 HERE = stigar.HERE
@@ -41,6 +55,24 @@ LOKALA = {"127.0.0.1", "::1"}
 # token — autentiseringen skulle vara avstängd utan att någon märkte det.
 # Sätt VVS_KRAV_TOKEN=1 på en server så krävs token även från 127.0.0.1.
 KRAV_TOKEN_ALLA = os.environ.get("VVS_KRAV_TOKEN", "") not in ("", "0", "nej")
+
+
+def _qr_utan_kod():
+    """En liten bild som förklarar varför QR-koden inte syns.
+
+    Skickas i samma ruta där koden skulle ha varit, så att rutan aldrig blir
+    tyst tom — den säger vad man gör i stället.
+    """
+    from xml.sax.saxutils import escape as _esc
+    rader = ["QR-koden kan inte ritas här.",
+             "Skriv in adressen nedan i telefonen."]
+    text = "".join(
+        f'<text x="95" y="{88 + i * 19}" text-anchor="middle" '
+        f'font-family="-apple-system,system-ui,sans-serif" font-size="11.5" '
+        f'fill="#5b6672">{_esc(r)}</text>' for i, r in enumerate(rader))
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="190" height="190" '
+            f'viewBox="0 0 190 190"><rect width="190" height="190" fill="#fff"/>'
+            f'{text}</svg>').encode("utf-8")
 
 
 def lan_ip():
@@ -322,7 +354,11 @@ class Svar(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         v = u.path
         if v in ("/", "/index.html"):
-            self._send(200, self._fil("index.html"), "text/html; charset=utf-8")
+            # Rubriken talar om ifall QR-koden kan ritas på den här servern.
+            # Den är publik med flit: det är den enda upplysning som går att få
+            # utan token, och den avslöjar ingenting om inventeringen.
+            self._send(200, self._fil("index.html"), "text/html; charset=utf-8",
+                       {"X-SYSVVS-QR": "ja" if QR_OK else "nej"})
             return
         if v.startswith("/bilder/"):
             self._bildfil(v)
@@ -415,20 +451,27 @@ class Svar(BaseHTTPRequestHandler):
         Skrivs som SVG i stället för PNG. Då räcker qrcode-paketet, som är ren
         Python utan beroenden — Pillow behövs inte, och det är just Pillow som
         saknas på en server. Bilden blir dessutom skarp i alla storlekar.
+
+        Går det inte att rita koden svarar vi ändå med en bild — en som säger
+        vad som är fel. En tom ruta går inte att skilja från "inget hände",
+        och då får man leta i blindo.
         """
-        try:
-            import io
-            import qrcode
-            import qrcode.image.svg
-        except ImportError:
-            self._fel(501, "qrcode-modulen saknas")
+        if not QR_OK:
+            print(f"QR: qrcode-modulen saknas ({_QR_FEL})", file=sys.stderr, flush=True)
+            self._send(200, _qr_utan_kod(), "image/svg+xml")
             return
-        cfg = las_config()
-        url = f"{self._bas_url()}/?t={urllib.parse.quote(cfg['token'])}"
-        img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage,
-                          box_size=12, border=3)
-        buf = io.BytesIO()
-        img.save(buf)
+        try:
+            cfg = las_config()
+            url = f"{self._bas_url()}/?t={urllib.parse.quote(cfg['token'])}"
+            img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage,
+                              box_size=12, border=3)
+            buf = io.BytesIO()
+            img.save(buf)
+        except Exception as exc:                                  # noqa: BLE001
+            print(f"QR: kunde inte rita koden ({type(exc).__name__}: {exc})",
+                  file=sys.stderr, flush=True)
+            self._send(200, _qr_utan_kod(), "image/svg+xml")
+            return
         self._send(200, buf.getvalue(), "image/svg+xml")
 
     def _kalkyl(self, u):

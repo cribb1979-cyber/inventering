@@ -268,8 +268,10 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <div class="namn">Koppla telefonen</div>
       <div class="meta">Samma inventering, samma server — allt du gör i telefonen syns direkt på datorn.</div>
       <div style="text-align:center;margin-top:11px">
-        <img id="qr" alt="QR-kod" style="width:190px;height:190px;background:#fff;border-radius:11px;padding:7px">
+        <img id="qr" alt="QR-kod" onerror="this.hidden=true;document.getElementById('qrfel').hidden=false"
+             style="width:190px;height:190px;background:#fff;border-radius:11px;padding:7px">
       </div>
+      <div class="tyst" id="qrfel" hidden style="text-align:center;margin-top:7px">Kunde inte hämta QR-koden. Skriv in adressen nedan i telefonen i stället.</div>
       <div class="tyst" id="mobilurl" style="text-align:center;margin-top:7px;word-break:break-all"></div>
     </div>
   </section>

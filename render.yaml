@@ -8,7 +8,13 @@ services:
     name: sysvvs-inventering
     runtime: python
     plan: starter            # starter krävs för att en disk ska kunna monteras
-    buildCommand: pip install -r requirements.txt
+    # python3 -m pip (inte bara pip) så att paketet hamnar i samma Python som
+    # startCommand kör. Sista kontrollen importerar QR-modulen med den Python
+    # som faktiskt ska använda den — går det inte stannar bygget här, i stället
+    # för att appen publiceras med en QR-ruta som aldrig fylls i.
+    buildCommand: >-
+      python3 -m pip install -r requirements.txt
+      && python3 -c "import qrcode.image.svg; print('QR-modulen är på plats')"
     startCommand: python3 server.py
     healthCheckPath: /       # startsidan är öppen; /api/* kräver token
     envVars:
