@@ -21,10 +21,13 @@ hitta_mapp() {
     if [ -n "${VVS_MAPP:-}" ] && [ -f "$VVS_MAPP/server.py" ]; then
         printf '%s' "$VVS_MAPP"; return 0
     fi
+    # installera.sh lägger en *länk* i ~/.local/bin. Följ den till den riktiga
+    # filen — annars letar vi i ~/.local/bin och hittar ingenting.
     local har
-    har="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || true
+    har="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+    har="$(cd "$(dirname "$har")" 2>/dev/null && pwd)" || true
     if [ -n "$har" ] && [ -f "$har/server.py" ]; then printf '%s' "$har"; return 0; fi
-    if [ -f "$har/../server.py" ]; then (cd "$har/.." && pwd); return 0; fi
+    if [ -n "$har" ] && [ -f "$har/../server.py" ]; then (cd "$har/.." && pwd); return 0; fi
     if [ -f "$HOME/vvs-inventering/server.py" ]; then
         printf '%s' "$HOME/vvs-inventering"; return 0
     fi
