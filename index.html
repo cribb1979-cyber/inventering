@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#101820">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SYS.VVS">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/ikon-192.png">
 <title>SYS.VVS — inventering</title>
 <style>
 :root{
@@ -256,6 +263,10 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
         <div><label>Ansvarig lärare</label><input id="i-ansvarig" placeholder="Namn"></div>
         <div><label>Fylls i senast</label><input id="i-deadline" type="date"></div>
       </div>
+      <label>Namn i namnvalet</label>
+      <input id="i-personer" placeholder="VVS, Christoffer, Erik">
+      <div class="tyst">Kommaseparerat. De här namnen föreslås när någon öppnar
+        appen — namnet hamnar i Historik. Inget lösenord.</div>
       <div style="display:flex;gap:9px;align-items:center;margin-top:11px">
         <button class="knapp flat" id="spara-inst">Spara uppgifterna</button>
         <span class="tyst" id="inst-kvitto"></span>
@@ -316,6 +327,15 @@ if (P.get("t")) { localStorage.setItem("vvs-token", P.get("t"));
   history.replaceState(null, "", location.pathname); }
 const TOKEN = localStorage.getItem("vvs-token") || "";
 
+/* Vem som skriver. Det här är märkning, inte inloggning: namnet sparas bara i
+   den här webbläsaren och skickas med varje ändring så att Historik visar vem
+   som gjorde vad. Det skyddar ingenting — men två lärare som delar en lista
+   ser ändå skillnad på varandras rader. */
+let VEM = localStorage.getItem("vvs-vem") || "";
+
+/* Huvudena som följer med varje anrop till servern. */
+function huvud() { return VEM ? {"X-Token": TOKEN, "X-Vem": VEM} : {"X-Token": TOKEN}; }
+
 /* Utan nyckel går ingenting att hämta: servern svarar 401 på allt. I stället
    för en rad röda felmeddelanden (och en QR-kod som aldrig kan ritas — den
    byggs av nyckeln) visas en ruta där nyckeln kan klistras in. Samma skript
@@ -358,7 +378,7 @@ $("#nyckel").addEventListener("keydown", e => {
 let SYNK = 0;
 
 async function api(vag, kropp) {
-  const o = {headers: {"X-Token": TOKEN}};
+  const o = {headers: huvud()};
   if (kropp !== undefined) {
     o.method = "POST";
     o.headers["Content-Type"] = "application/json";
@@ -525,17 +545,17 @@ document.addEventListener("click", async e => {
       synkaVersion(d.version);
       return;
     }
-    if (knapp && knapp.dataset.redigera) {
+    if (knapp && knapp.dataset.redigera !== undefined) {
       MODELL = null;
       laggUppFormulär(post, post.bild);
       return;
     }
-    if (knapp && knapp.dataset.foto) {
+    if (knapp && knapp.dataset.foto !== undefined) {
       $("#fil").dataset.id = id;
       $("#fil").click();
       return;
     }
-    if (knapp && knapp.dataset.radera) {
+    if (knapp && knapp.dataset.radera !== undefined) {
       if (!confirm(`Ta bort "${post.namn}" ur inventeringen?`)) return;
       const d = await api("/api/radera", {id, bekrafta: true});
       DATA.poster = DATA.poster.filter(p => p.id !== id);
@@ -557,6 +577,11 @@ function byt(vy) {
 }
 
 $("#sok").addEventListener("input", e => { SOK = e.target.value; visa(filtrera()); });
+
+/* Tryck på namnet i rubriken för att byta vem man skriver som. */
+$("#vem").addEventListener("click", () => visaVem(true));
+$("#vem").style.cursor = "pointer";
+$("#vem").title = "Byt namn";
 
 /* ---------------------------------------------------------------- bild + AI */
 $("#kamera").addEventListener("click", () => { $("#fil").dataset.id = ""; $("#fil").click(); });
@@ -837,7 +862,8 @@ async function laddaLogg() {
     const d = await api("/api/logg");
     $("#logg").innerHTML = '<div class="kort">' + (d.logg.length
       ? d.logg.map(r => `<div style="padding:5px 0;border-bottom:1px solid var(--line)">
-          <span class="tyst">${esc(r.tid)}</span> <b>${esc(r.handling)}</b>
+          <span class="tyst">${esc(r.tid)}</span> <b>${esc(r.handling)}</b>${
+            r.vem ? ` <span class="tyst">· ${esc(r.vem)}</span>` : ""}
           <div class="meta">${esc(r.text)}</div></div>`).join("")
       : '<div class="tom">Ingen historik än.</div>') + "</div>";
   } catch (fel) { $("#logg").innerHTML = `<div class="varning fel">${esc(fel.message)}</div>`; }
@@ -861,6 +887,7 @@ async function laddaInstallningar() {
     $("#i-skola").value = INST.skola || "";
     $("#i-program").value = INST.program || "";
     $("#i-ansvarig").value = INST.ansvarig || "";
+    $("#i-personer").value = (INST.personer || []).join(", ");
     $("#i-deadline").value = INST.deadline || "";
     $("#s-text").value = INST.standardbrev || "";
     $("#s-amne").value = "Inventering " + (INST.program || "VVS") + " — " +
@@ -898,6 +925,7 @@ $("#spara-inst").addEventListener("click", async () => {
     const d = await api("/api/installningar", {
       skola: $("#i-skola").value, program: $("#i-program").value,
       ansvarig: $("#i-ansvarig").value, deadline: $("#i-deadline").value,
+      personer: $("#i-personer").value.split(",").map(s => s.trim()).filter(Boolean),
     });
     INST.deadline_text = d.deadline_text; INST.deadagar = d.dagar_kvar;
     INST.dagar_kvar = d.dagar_kvar;
@@ -940,7 +968,7 @@ function synkaVersion(v) { VERSION = v; $("#synk").textContent = "sparat " + new
 
 async function polla() {
   try {
-    const svar = await fetch("/api/status", {headers: {"X-Token": TOKEN}});
+    const svar = await fetch("/api/status", {headers: huvud()});
     if (svar.status === 401) {     // nyckel saknas eller är fel: fråga inte om
       visaKoppla(TOKEN ? "Nyckeln stämmer inte." : "Sidan är öppen utan nyckel.");
       if (SYNK) { clearInterval(SYNK); SYNK = 0; }
@@ -950,7 +978,9 @@ async function polla() {
     if (d.fel) throw new Error(d.fel);
     $("#prick").className = "punkt";
     MODELL = d.bildmodell;
-    $("#vem").textContent = location.hostname === "127.0.0.1" || location.hostname === "localhost" ? "(datorn)" : "(mobil)";
+    visaVemNamn();
+    // Fråga först när namnlistan är hämtad, så att förslagen finns med.
+    if (!VEM && INST.personer !== undefined) visaVem();
     $("#status").innerHTML = MODELL
       ? "bild-AI: " + esc(MODELL)
       : 'ingen bildmodell — på datorn: <code>ollama pull ' +
@@ -970,6 +1000,59 @@ async function polla() {
     $("#prick").className = "punkt av";
     $("#status").textContent = "tappade kontakten — försöker igen";
   }
+}
+
+/* ---------------------------------------------------------------- vem skriver
+   Ett namnval, inte ett lösenord. Namnet sparas i telefonens egen webbläsare
+   och följer med varje ändring, så att Historik visar "vem" i stället för
+   ingenting. Att byta namn är alltid möjligt — tryck på namnet i rubriken. */
+function visaVemNamn() {
+  const v = $("#vem");
+  if (v) v.textContent = VEM ? "(" + VEM + ")" : "";
+}
+
+function visaVem(tvinga) {
+  const modal = $("#modal");
+  if (!tvinga && modal.classList.contains("pa")) return;   // rita inte om mitt i valet
+  const lista = (INST.personer || []);
+  $("#ark").innerHTML =
+    '<h2>Vem skriver?</h2>' +
+    '<div class="meta">Namnet står i <b>Historik</b> så att ni ser vem som ' +
+    'gjort vad. Det är bara en märkning — inget lösenord, och inget skickas ' +
+    'någon annanstans.</div>' +
+    (lista.length ? '<div style="margin-top:13px">' + lista.map(n =>
+      `<button class="knapp flat" data-val="${esc(n)}"
+         style="width:100%;margin-bottom:7px;text-align:left">${esc(n)}</button>`
+      ).join("") + "</div>" : "") +
+    '<label>Eget namn</label>' +
+    '<div style="display:flex;gap:7px">' +
+      '<input id="vem-egen" placeholder="t.ex. Christoffer" autocomplete="off" ' +
+             'autocapitalize="words" style="flex:1;min-width:0">' +
+      '<button class="knapp prim" id="vem-spara" style="flex:0 0 auto">Klar</button>' +
+    "</div>" +
+    (VEM ? `<button class="knapp flat" id="vem-avbryt"
+              style="width:100%;margin-top:11px">Behåll ${esc(VEM)}</button>` : "");
+  modal.classList.add("pa");
+
+  for (const b of $("#ark").querySelectorAll("[data-val]"))
+    b.addEventListener("click", () => valjVem(b.dataset.val));
+  const egen = $("#vem-egen");
+  const spara = () => valjVem(egen.value);
+  $("#vem-spara").addEventListener("click", spara);
+  egen.addEventListener("keydown", e => { if (e.key === "Enter") spara(); });
+  const avbryt = $("#vem-avbryt");
+  if (avbryt) avbryt.addEventListener("click", () => modal.classList.remove("pa"));
+  else egen.focus();
+}
+
+function valjVem(namn) {
+  namn = (namn || "").trim();
+  if (!namn) { const e = $("#vem-egen"); if (e) e.focus(); return; }
+  VEM = namn;
+  try { localStorage.setItem("vvs-vem", VEM); } catch (e) {}   // privat läge: kör vidare utan minne
+  $("#modal").classList.remove("pa");
+  visaVemNamn();
+  polla();
 }
 
 /* ---------------------------------------------------------------- start */

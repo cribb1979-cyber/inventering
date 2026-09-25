@@ -186,6 +186,12 @@ def las_config():
         if nyckel not in cfg:
             cfg[nyckel] = tomt
             ändrad = True
+    if "personer" not in cfg:
+        # Namnlistan i namnvalet. "VVS" först, sedan förnamnet på den som är
+        # ansvarig — fler läggs till i Inställningar.
+        förnamn = (cfg.get("ansvarig") or "").split()
+        cfg["personer"] = ["VVS"] + ([förnamn[0]] if förnamn else [])
+        ändrad = True
     if ändrad:
         skriv_config(cfg)
     # Miljövariablerna sist, så att de alltid gäller.
@@ -388,6 +394,17 @@ class Svar(BaseHTTPRequestHandler):
         if v.startswith("/bilder/"):
             self._bildfil(v)
             return
+        # PWA-filerna. Publika med flit: webbläsaren hämtar manifestet och
+        # ikonerna utan token, och de säger ingenting om inventeringen —
+        # bara vad appen heter och hur den ser ut på hemskärmen.
+        if v == "/manifest.json":
+            self._send(200, self._fil("manifest.json"), "application/manifest+json")
+            return
+        if v in ("/ikon-192.png", "/ikon-512.png", "/ikon-180.png",
+                 "/apple-touch-icon.png"):
+            namn = "ikon-180.png" if v == "/apple-touch-icon.png" else v[1:]
+            self._send(200, self._fil(namn), "image/png")
+            return
         if not self._autentiserad():
             self._fel(401, "ogiltig eller saknad token")
             return
@@ -405,6 +422,7 @@ class Svar(BaseHTTPRequestHandler):
                                  "skola": cfg.get("skola") or "",
                                  "program": cfg.get("program") or "",
                                  "ansvarig": cfg.get("ansvarig") or "",
+                                 "personer": cfg.get("personer") or [],
                                  "deadline": deadline_text(cfg.get("deadline")),
                                  "dagar_kvar": dagar_kvar(cfg.get("deadline")),
                                  "epost": epost.ar_redo(),
@@ -430,6 +448,7 @@ class Svar(BaseHTTPRequestHandler):
                 self._json(200, {"skola": cfg.get("skola") or "",
                                  "program": cfg.get("program") or "",
                                  "ansvarig": cfg.get("ansvarig") or "",
+                                 "personer": cfg.get("personer") or [],
                                  "deadline": (cfg.get("deadline") or "")[:10],
                                  "deadline_text": deadline_text(cfg.get("deadline")),
                                  "dagar_kvar": dagar_kvar(cfg.get("deadline")),
@@ -581,32 +600,45 @@ class Svar(BaseHTTPRequestHandler):
         except Exception as exc:                                # noqa: BLE001
             self._fel(500, f"{type(exc).__name__}: {exc}")
 
+    def _vem(self):
+        """Namnet klienten uppger att den skriver som. Märkning, inte inloggning.
+
+        Namnet kommer från webbläsarens namnval och går att ljuga om — det
+        står i historiken för att man ska se vem av lärarna som gjorde vad,
+        inte som ett skydd. Därför klipps det kort och rensas från kontroll-
+        tecken, så att det inte kan skriva sönder loggen."""
+        rått = (self.headers.get("X-Vem") or "").strip()
+        if not rått:
+            return ""
+        rent = "".join(c for c in rått if c.isprintable())[:40].strip()
+        return rent
+
     def _rutter(self, v, kropp):
         if v == "/api/ny":
             if not kropp.get("program"):        # ärvs från inställningarna
                 program = (las_config().get("program") or "").strip()
                 if program:
                     kropp = dict(kropp, program=program)
-            post = lager.ny(kropp)
+            post = lager.ny(kropp, self._vem())
             self._logg("ny", post.get("namn", ""))
             self._json(200, {"post": post, "version": lager.las()["version"]})
             return
         if v == "/api/andra":
             pid = kropp.get("id") or ""
-            post = lager.andra(pid, kropp)
+            post = lager.andra(pid, kropp, self._vem())
             self._logg("andra", post.get("namn", ""))
             self._json(200, {"post": post, "version": lager.las()["version"]})
             return
         if v == "/api/rakna":
             pid = kropp.get("id") or ""
-            post = lager.rakna(pid, float(kropp.get("delta") or 0))
+            post = lager.rakna(pid, float(kropp.get("delta") or 0), self._vem())
             self._json(200, {"post": post, "version": lager.las()["version"]})
             return
         if v == "/api/radera":
             if not kropp.get("bekrafta"):
                 self._fel(400, "radering kräver bekrafta: true")
                 return
-            bort = lager.radera(kropp.get("id") or "")
+            bort = lager.radera(kropp.get("id") or "", self._vem())
             self._logg("radera", bort.get("namn", ""))
             self._json(200, {"bort": bort, "version": lager.las()["version"]})
             return
@@ -626,6 +658,14 @@ class Svar(BaseHTTPRequestHandler):
         for nyckel in ("skola", "program", "ansvarig", "deadline"):
             if nyckel in kropp:
                 cfg[nyckel] = str(kropp[nyckel] or "").strip()[:200]
+        if isinstance(kropp.get("personer"), list):
+            namn, sedda = [], set()
+            for n in kropp["personer"]:
+                n = "".join(c for c in str(n) if c.isprintable()).strip()[:40]
+                if n and n.lower() not in sedda:
+                    sedda.add(n.lower())
+                    namn.append(n)
+            cfg["personer"] = namn[:20]
         if kropp.get("ai_modell") is not None:
             cfg.setdefault("ai", {})["modell"] = str(kropp["ai_modell"] or "").strip()
         skriv_config(cfg)

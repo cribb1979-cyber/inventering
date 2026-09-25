@@ -95,13 +95,20 @@ def las():
             return _tomt_lager()
 
 
-def spara(data, handling, text=""):
-    """Skriver lagret, höjer versionen och lägger en rad i historiken."""
+def spara(data, handling, text="", vem=""):
+    """Skriver lagret, höjer versionen och lägger en rad i historiken.
+
+    vem är namnet på den som gjorde ändringen — telefonens eller datorns
+    namnval. Det är märkning, inte inloggning: namnet kommer från klienten
+    och går att ljuga om. Det står därför ingenting om namnet i texten."""
     with LÅS:
         data["version"] = int(data.get("version", 1)) + 1
         data.setdefault("logg", [])
-        data["logg"].append({"tid": time.strftime("%Y-%m-%d %H:%M:%S"),
-                             "handling": handling, "text": text[:300]})
+        rad = {"tid": time.strftime("%Y-%m-%d %H:%M:%S"),
+               "handling": handling, "text": text[:300]}
+        if vem:
+            rad["vem"] = vem[:40]
+        data["logg"].append(rad)
         data["logg"] = data["logg"][-500:]
         os.makedirs(os.path.dirname(FIL), exist_ok=True)
         tmp = FIL + ".tmp"
@@ -169,7 +176,7 @@ def _stada_falt(kropp, ny=False):
     return ut
 
 
-def ny(kropp):
+def ny(kropp, vem=""):
     """Lägger till ett föremål. Antal 1 om inget anges."""
     # Hela läs-ändra-skriv-sekvensen under låset. Annars kan två
     # samtidiga ändringar läsa samma läge och den ena försvinna.
@@ -183,11 +190,11 @@ def ny(kropp):
         nu = time.strftime("%Y-%m-%d %H:%M")
         post = {"id": uuid.uuid4().hex[:8], "skapad": nu, "andrad": nu, **falt}
         data["poster"].append(post)
-        spara(data, "ny", f"{post['namn']} ({post.get('kategori')})")
+        spara(data, "ny", f"{post['namn']} ({post.get('kategori')})", vem)
         return post
 
 
-def andra(pid, kropp):
+def andra(pid, kropp, vem=""):
     """Ändrar angivna fält på ett föremål. Övriga rörs inte."""
     # Hela läs-ändra-skriv-sekvensen under låset. Annars kan två
     # samtidiga ändringar läsa samma läge och den ena försvinna.
@@ -204,12 +211,12 @@ def andra(pid, kropp):
                 post["andrad"] = time.strftime("%Y-%m-%d %H:%M")
                 beskriv = ", ".join(f"{k}: {gammalt or '–'}→{nytt or '–'}"
                                     for k, (gammalt, nytt) in ändrade.items())
-                spara(data, "andra", f"{post['namn']}: {beskriv}")
+                spara(data, "andra", f"{post['namn']}: {beskriv}", vem)
                 return post
         raise KeyError(pid)
 
 
-def rakna(pid, delta):
+def rakna(pid, delta, vem=""):
     """Räknar av eller lägger till. Används när något förbrukas eller köps in.
 
     Går aldrig under noll, och en förbrukad post blir 'borta' automatiskt så
@@ -232,12 +239,12 @@ def rakna(pid, delta):
                 elif efter > 0 and post.get("skick") == "borta":
                     post["skick"] = "ok"
                 spara(data, "rakna", f"{post['namn']}: {före:g} → {efter:g} "
-                                     f"({'+' if tal > 0 else ''}{tal:g})")
+                                     f"({'+' if tal > 0 else ''}{tal:g})", vem)
                 return post
         raise KeyError(pid)
 
 
-def radera(pid):
+def radera(pid, vem=""):
     # Hela läs-ändra-skriv-sekvensen under låset. Annars kan två
     # samtidiga ändringar läsa samma läge och den ena försvinna.
     with LÅS:
@@ -247,7 +254,7 @@ def radera(pid):
         data["poster"] = [p for p in data["poster"] if p["id"] != pid]
         if len(data["poster"]) == för:
             raise KeyError(pid)
-        spara(data, "radera", bort[0]["namn"] if bort else pid)
+        spara(data, "radera", bort[0]["namn"] if bort else pid, vem)
         return bort[0] if bort else {}
 
 
