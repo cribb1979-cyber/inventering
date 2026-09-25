@@ -20,8 +20,9 @@ Det du behöver skaffa under vägen:
 
 ## Steg 1 — Få upp koden på GitHub
 
-Allt är förberett lokalt: koden är committad, och repoadressen är redan
-inlaggad som `origin`. Det enda som fattas är att du loggar in en gång.
+Allt är förberett: koden är committad, repoadressen är inlagd, och repots
+egen "Initial commit" är redan ihopslagen med din historik. Kvar är bara att
+logga in och skjuta upp.
 
 **Kör det här själv i en terminal** — inloggningen kräver att du svarar i en
 webbläsare, så den kan inte göras automatiskt:
@@ -33,13 +34,18 @@ gh auth login
 Välj: **GitHub.com** → **HTTPS** → **Login with a web browser**. Kopiera
 engångskoden du får och klistra in den på sidan som öppnas.
 
-Sedan skickar du upp koden:
+Skjut sedan upp koden — det är ett enda kommando, eftersom allt annat redan
+är gjort:
 
 ```bash
 cd ~/vvs-inventering
-git add -A
-git commit -m "Förberett för drift: flyttbar lagring, moln-AI, deploymentfiler"
 git push -u origin main
+```
+
+Kontrollera att ingenting känsligt följde med:
+
+```bash
+git ls-files | grep -E "config\.json|\.env$"     # ska svara inget
 ```
 
 > **Repot är publikt.** Vem som helst kan läsa koden. Det som ligger där är
@@ -48,12 +54,6 @@ git push -u origin main
 > **Settings** → längst ner → **Change visibility** → *Make private*. Render
 > kan publicera från ett privat repo också, men då måste du ge Render
 > åtkomst till det (Render frågar om det när du väljer repot).
-
-Efter `git push` kan du kontrollera att ingenting känsligt följde med:
-
-```bash
-git ls-files | grep -E "config\.json|\.env$"     # ska svara inget
-```
 
 > **Netlify bygger på samma repo.** Netlify försöker bygga varje gång du
 > pushar, och det kommer att misslyckas — det är väntat, för Netlify kan inte
