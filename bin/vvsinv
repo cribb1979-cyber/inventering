@@ -2,9 +2,16 @@
 # SYS.VVS — inventering av VVS-verkstaden.
 #
 #   vvsinv              öppna appen
-#   vvsinv --omstart    starta om servern så att ändrad kod laddas
+#   vvsinv --omstart    starta om servern så att ändrad kod laddas (lokal)
 #   vvsinv --qr         skriv ut telefonadressen och en QR-kod i terminalen
 #   vvsinv --nyckel     visa nyckeln (klistras in i Render under VVS_TOKEN)
+#   vvsinv --lokal      kör den lokala servern även om molnet är valt
+#
+# Är "moln" ifyllt i config.json (t.ex. https://sysvvs-inventering.onrender.com)
+# öppnar vvsinv den adressen i stället för att starta en egen server. Då finns
+# det bara *en* inventering: den på serverns disk. Telefonen och datorn ser
+# samma lista, och datorn behöver inte vara på. Den lokala servern finns kvar
+# och nås med --lokal när man vill köra utan nät.
 #
 # Var appen ligger hittas på tre sätt, i tur och ordning:
 #   1. miljövariabeln VVS_MAPP
@@ -52,12 +59,13 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 1
 fi
 
-OMSTART=0; QR=0; NYCKEL=0
+OMSTART=0; QR=0; NYCKEL=0; LOKAL=0
 for arg in "$@"; do
     case "$arg" in
         --omstart|omstart) OMSTART=1 ;;
         --qr|qr)           QR=1 ;;
         --nyckel|nyckel)   NYCKEL=1 ;;
+        --lokal|lokal)     LOKAL=1 ;;
     esac
 done
 
@@ -66,6 +74,22 @@ las_token() {
 import json
 try: print(json.load(open('$KONFIG')).get('token',''))
 except Exception: print('')" 2>/dev/null
+}
+
+# Molnadressen: ur miljön om den finns, annars ur config.json. Tom = kör lokalt.
+las_moln() {
+    if [ -n "${VVS_MOLN:-}" ]; then printf '%s' "$VVS_MOLN"; return 0; fi
+    python3 -c "
+import json
+try: print(json.load(open('$KONFIG')).get('moln','') or '')
+except Exception: print('')" 2>/dev/null
+}
+
+# Gör om 'host' eller 'https://host/' till en ren bas utan avslutande snedstreck.
+rena_adress() {
+    local a="$1"
+    case "$a" in http://*|https://*) ;; *) a="https://$a" ;; esac
+    printf '%s' "${a%/}"
 }
 
 # --nyckel skriver bara ut nyckeln, så att den kan klistras in i Render
@@ -82,6 +106,44 @@ if [ "$NYCKEL" = 1 ]; then
     echo "  $TOKEN"
     echo
     echo "Telefonen behöver inget: den får nyckeln via QR-koden i Kalkyl."
+    exit 0
+fi
+
+# --- molnet: en enda sanning -------------------------------------------------
+# Är en molnadress vald öppnar vi den i stället för att starta en egen server.
+# Då finns bara en inventering — den på serverns disk — och datorn behöver
+# inte vara på. Ingen lokal bildmodell laddas i onödan. --lokal (eller
+# --omstart, som bara gäller en lokal server) går förbi molnet.
+MOLN=""
+[ "$LOKAL" = 1 ] || MOLN="$(las_moln)"
+if [ -n "$MOLN" ] && [ "$OMSTART" != 1 ]; then
+    MOLN="$(rena_adress "$MOLN")"
+    TOKEN="$(las_token)"
+    CLOUD="$MOLN"
+    [ -n "$TOKEN" ] && CLOUD="$MOLN/?t=$TOKEN"
+    echo "SYS.VVS — molnet. Inventeringen ligger på servern, inte här."
+    echo "  adress : $MOLN"
+    if [ -z "$TOKEN" ]; then
+        echo "  varning: ingen nyckel i $KONFIG — sidan frågar efter den." >&2
+    fi
+    if [ "$QR" = 1 ]; then
+        if command -v qrencode >/dev/null 2>&1 && [ -n "$TOKEN" ]; then
+            qrencode -t ANSIUTF8 "$CLOUD" 2>/dev/null || true
+            echo
+        fi
+        echo "Skanna koden, eller öppna $MOLN i telefonens webbläsare."
+        echo "Nyckeln följer med i länken — samma nyckel som i Render."
+        exit 0
+    fi
+    command -v notify-send >/dev/null 2>&1 && \
+        notify-send -i sysvvs "SYS.VVS" "Öppnar molnet:\n$MOLN" 2>/dev/null || true
+    if [ -x "$HOME/.local/bin/sysappfonster" ]; then
+        exec "$HOME/.local/bin/sysappfonster" "$PROFIL" "$CLOUD" "$TITEL"
+    fi
+    if command -v xdg-open >/dev/null 2>&1; then
+        exec xdg-open "$CLOUD"
+    fi
+    echo "Öppna $CLOUD i webbläsaren."
     exit 0
 fi
 

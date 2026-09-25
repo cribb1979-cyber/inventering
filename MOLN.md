@@ -37,6 +37,20 @@ länken kommer in. Det är tillräckligt för en inventering inom skolan, men
 det är inte ett riktigt konto med lösenord och utloggning. Vill du ha det
 behövs mer arbete.
 
+## Två lager av filer — välj ett
+
+Datorn och molnet är samma program men **två skilda lager av filer**. De synkas
+inte av sig själva. Bestäm därför vilken som är den riktiga:
+
+* **Molnet som sanning** — både telefon och dator öppnar Render-adressen. En
+  lista, alltid, och datorn behöver inte vara på. Så pekar du om datorn: fyll i
+  nyckeln `moln` i `config.json` (se `DEPLOY.md`).
+* **Datorn som sanning** — kör lokalt (`LASMIG.md`) och låt telefonen vara på
+  samma nät. Då lämnar inga foton datorn, men datorn måste vara påslagen.
+
+Att köra båda samtidigt är möjligt men förvirrande: du får två listor som
+aldrig möts.
+
 ## Alternativet: tunneln
 
 Datorn är servern, och telefonen når den utifrån via Tailscale. Ingen kod

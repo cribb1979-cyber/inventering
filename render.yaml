@@ -32,6 +32,21 @@ services:
         sync: false
       - key: VVS_AI_NYCKEL
         sync: false
+      # E-post — behövs för att kunna mejla kalkylarket *från molnet*. Det
+      # konto som annars lånas från SYS.ASSIST finns bara på datorn, så här
+      # måste det anges en gång. Använd ett applösenord (16 tecken), aldrig
+      # det vanliga Google-lösenordet. Lämnas de tomma går allt utom
+      # "Skicka kalkylarket" som vanligt.
+      - key: VVS_MEJL_ADRESS
+        sync: false
+      - key: VVS_MEJL_NAMN
+        sync: false
+      - key: VVS_MEJL_SMTP_SERVER
+        value: smtp.gmail.com
+      - key: VVS_MEJL_SMTP_PORT
+        value: "465"
+      - key: VVS_MEJL_LOSENORD
+        sync: false
       # Frivilligt — fyll i för att slippa skriva in det i appen:
       # - key: VVS_SKOLA
       #   value: Praktiska Uppsala

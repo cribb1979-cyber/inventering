@@ -18,6 +18,11 @@ när som helst. Telefonen och datorn ser samma sak.
 * startmenyn → SYS.VVS, eller
 * `vvsinv` i en terminal
 
+Har du valt att lägga appen i molnet (se `DEPLOY.md`) öppnar **SYS.VVS** och
+`vvsinv` i stället den utlagda adressen — då visar datorn och telefonen samma
+lista, och datorn behöver inte vara på. Vill du ändå köra lokalt någon gång:
+`vvsinv --lokal`.
+
 ## Snabb översikt
 
 | Vill du… | Läs |
@@ -75,6 +80,17 @@ sedan på **Kalkyl**-sidan, och telefonens kamera gör resten.
 | **Lägg till** | Skriv in ett föremål, eller **ta ett foto** — AI:n listar allt den ser i bilden. |
 | **Kalkylark** | Sammanställning per investeringsbehov, export till Excel/CSV och knappen som mejlar arket till yrkesläraren. |
 | **Historik** | Varje ändring, vem som gjorde den och när. |
+
+## Vem skriver
+
+Första gången en enhet öppnar appen får man välja vem man skriver som.
+Namnet sparas i webbläsaren och följer med varje ändring, så **Historik** visar
+vem som gjorde vad. Listan ligger i `config.json` under `personer` och
+redigeras under **Inställningar**.
+
+Det är **märkning, inte inloggning** — det går att ljuga om namnet, och
+skyddet är fortfarande nyckeln i länken. Poängen är bara att ni som delar
+inventeringen ska se skillnad på varandras rader.
 
 ## Foto och AI
 
@@ -173,12 +189,13 @@ Programmet ärvs automatiskt av nya föremål.
 | `bin/vvsinv` | Startfilen |
 | `installera.sh` | Sätter upp appen på en ny dator |
 | `sysvvs.desktop` | Skrivbordsikonen och startmenyn |
+| `manifest.json`, `ikon-*.png` | PWA:n — ikon och namn när appen läggs på hemskärmen |
 | `DEPLOY.md` | Guiden för att lägga appen på nätet |
 | `MOLN.md` | Bakgrunden: varför Netlify inte går, vad molnet kostar |
 | `data/inventering.json` | Inventeringen och historiken |
 | `data/bilder/` | Fotona |
 | `data/export/` | Exporterade kalkylark |
-| `config.json` | Token, port och uppgifterna om skolan (rättighet 600) |
+| `config.json` | Token, port, molnadressen och uppgifterna om skolan (rättighet 600) |
 
 Saknas `config.json` skapas den första gången appen startar, med en egen
 slumpad token. `config.example.json` visar vilka fält som finns.
@@ -201,6 +218,10 @@ behövs ett konto i `config.json`:
 Använd ett **applösenord**, inte ditt vanliga lösenord. Saknas kontot visas
 ett besked i appen och du kan ladda ner arket och bifoga det själv i stället.
 Finns ett konto uppsatt för SYS.ASSIST lånas det automatiskt.
+
+Körs appen i **molnet** lånas ingenting från datorn — där finns ju ingen
+`~/assistent/config.json`. Kontot måste i stället anges som miljövariabler
+(`VVS_MEJL_*`) i Render. Se `DEPLOY.md`.
 
 ## Starta om
 

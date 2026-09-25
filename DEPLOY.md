@@ -103,6 +103,19 @@ platform.openai.com och sätt `VVS_AI_LEVERANTOR=openai`.
 
    **VVS_AI_NYCKEL** — nyckeln du kopierade i steg 2.
 
+   **VVS_MEJL_ADRESS**, **VVS_MEJL_NAMN**, **VVS_MEJL_LOSENORD** — bara om du
+   vill kunna trycka **Skicka kalkylarket** inifrån molnet. På datorn lånar
+   appen kontot från SYS.ASSIST, men den filen finns inte på servern, så där
+   måste kontot anges. `VVS_MEJL_LOSENORD` är **applösenordet** (16 tecken),
+   inte det vanliga Google-lösenordet — samma som SYS.ASSIST använder.
+   `VVS_MEJL_SMTP_SERVER` och `VVS_MEJL_SMTP_PORT` är redan ifyllda
+   (`smtp.gmail.com`, `465`). Lämnar du de tre tomma fungerar allt utom
+   knappen **Skicka** — då laddar du bara ner arket och bifogar det själv.
+
+   > **Finns tjänsten redan?** Render läser `render.yaml` bara när tjänsten
+   > *skapas*. Nya variabler lägger du då till själv: **Environment** →
+   > **Add Environment Variable**. Samma för e-postvariablerna nedan.
+
 5. Tryck **Apply** / **Create**. Render bygger och startar. Det tar några
    minuter; första bygget är långsammast.
 
@@ -143,6 +156,33 @@ verkstaden städar du upp vid skrivbordet.
 > innehåller nyckeln. Därför står det "Sidan är öppen utan nyckel" i rutan
 > ovan tills du klistrat in den.
 
+### Datorn mot molnet — en enda inventering
+
+Nu finns appen på två ställen: den utlagda adressen och din egen dator. De
+delar **ingen** data — samma program, men två skilda lager av filer. Väljer du
+molnet som sanning ska datorn också öppna molnet:
+
+```bash
+vvsinv              # öppnar molnet i stället för att starta en egen server
+```
+
+Det styrs av nyckeln `moln` i `config.json` (eller `VVS_MOLN` i miljön):
+
+```json
+"moln": "https://sysvvs-inventering.onrender.com"
+```
+
+Då öppnar skrivbordsikonen **SYS.VVS** och kommandot `vvsinv` adressen på
+servern. Telefonen och datorn ser **exakt samma lista** — en ändring syns på
+det andra stället inom ett par sekunder. Ingen lokal server startas och ingen
+bildmodell laddas (de 3 GB stannar orörda).
+
+Vill du hellre köra lokalt någon gång: `vvsinv --lokal`. Då startar den
+lokala servern som förut, med sin egen kopia i `data/`.
+
+> Nyckeln i `config.json` måste vara **samma** som `VVS_TOKEN` i Render. Är de
+> olika frågar molnet efter den rätta nyckeln varje gång du öppnar det.
+
 ---
 
 ## Steg 5 — Provkör
@@ -155,6 +195,8 @@ Gå igenom de här punkterna en gång direkt, så vet du att allt hänger ihop:
       (Första analysen kan ta upp till en halv minut.)
 - [ ] Öppna samma sida på datorn → föremålet finns där också.
 - [ ] **Kalkylark** → **Excel** → filen laddas ner.
+- [ ] **Kalkylark** → fyll i din egen adress → **Skicka** → brevet kommer med
+      Excel-bilagan. (Hoppa över om du inte satte `VVS_MEJL_*`.)
 - [ ] Starta om tjänsten i Render (**Manual Deploy** → *Restart*) → föremålet
       finns **kvar**. Detta prövar att disken fungerar.
 
@@ -174,6 +216,8 @@ monterad — då är `VVS_DATA` fel inställd.
 | Bildanalysen svarar "ingen bildmodell" | nyckeln saknas eller är fel | kontrollera `VVS_AI_NYCKEL` under Environment |
 | "Modellen … finns inte längre" | modellnamnet har pensionerats | inget att göra — appen byter namn själv och skriver vilket den valde |
 | Analysen svarar 400/403 | nyckeln avvisas | skapa en ny nyckel på aistudio.google.com |
+| "Inget e-postkonto är ifyllt" i molnet | `VVS_MEJL_*` är inte ifyllda i Render (kontot på datorn finns inte på servern) | fyll i dem under *Environment* och starta om tjänsten |
+| Mejlet skickas inte (SMTP-fel) | vanliga Google-lösenordet i stället för app-lösenordet | skapa ett applösenord och sätt `VVS_MEJL_LOSENORD` |
 | Vill du se vilken modell som används | — | öppna `https://<din adress>/api/ai-koll?t=<VVS_TOKEN>` i telefonen |
 | Sidan är långsam första gången | gratistjänsten "somnar" | normal första gångs last. Uppgradera planen om det stör |
 | Bygget misslyckas | fel i koden | läs loggen i Render → **Logs** |

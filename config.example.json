@@ -1,6 +1,7 @@
 {
  "token": "byter-ut-sig-själv-vid-första-start",
  "port": 8792,
+ "moln": "",
  "ai": {"modell": ""},
  "skola": "Praktiska Uppsala",
  "program": "VVS & fastighet",

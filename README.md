@@ -18,6 +18,11 @@ Kräver bara `python3`. Inga paket behöver installeras.
 | Köra utan att datorn är på — en adress du når varifrån som helst | [`DEPLOY.md`](DEPLOY.md) |
 | Förstå vad molnet kostar och varför Netlify inte går | [`MOLN.md`](MOLN.md) |
 
+Är appen utlagd på Render och du vill att **datorn visar samma lista** som
+telefonen fyller du i `moln` i `config.json` med adressen. Då öppnar `vvsinv`
+och skrivbordsikonen molnet i stället för att starta en egen server — en
+inventering, ingen att hålla i synk. Se [`DEPLOY.md`](DEPLOY.md).
+
 ## Snabbstart på en dator
 
 ```bash
