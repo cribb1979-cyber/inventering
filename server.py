@@ -46,6 +46,36 @@ def lan_ip():
         s.close()
 
 
+def miljo_overstyrning():
+    """Inställningar från miljövariabler.
+
+    På en server (Render, en VPS) får hemligheterna inte ligga i en fil i
+    kodträdet. Miljövariabler vinner därför över config.json. Lokalt är de
+    tomma och då gäller filen precis som förut.
+
+    VVS_TOKEN, VVS_SKOLA, VVS_PROGRAM, VVS_ANSVARIG, VVS_DEADLINE,
+    VVS_MEJL_<ADRESS|NAMN|SMTP_SERVER|SMTP_PORT|LOSENORD>
+    """
+    ut = {}
+    for nyckel, namn in (("token", "VVS_TOKEN"), ("skola", "VVS_SKOLA"),
+                         ("program", "VVS_PROGRAM"), ("ansvarig", "VVS_ANSVARIG"),
+                         ("deadline", "VVS_DEADLINE")):
+        v = os.environ.get(namn)
+        if v:
+            ut[nyckel] = v
+    mejl = {}
+    for nyckel, namn in (("adress", "VVS_MEJL_ADRESS"), ("namn", "VVS_MEJL_NAMN"),
+                         ("smtp_server", "VVS_MEJL_SMTP_SERVER"),
+                         ("smtp_port", "VVS_MEJL_SMTP_PORT"),
+                         ("losenord", "VVS_MEJL_LOSENORD")):
+        v = os.environ.get(namn)
+        if v:
+            mejl[nyckel] = v
+    if mejl:
+        ut["mejl"] = mejl
+    return ut
+
+
 def las_config():
     try:
         with open(CONFIG, encoding="utf-8") as fh:
@@ -67,6 +97,12 @@ def las_config():
             ändrad = True
     if ändrad:
         skriv_config(cfg)
+    # Miljövariabler sist, så att de alltid gäller. Skrivs aldrig till filen.
+    for nyckel, v in miljo_overstyrning().items():
+        if nyckel == "mejl":
+            cfg["mejl"] = {**(cfg.get("mejl") or {}), **v}
+        else:
+            cfg[nyckel] = v
     return cfg
 
 
