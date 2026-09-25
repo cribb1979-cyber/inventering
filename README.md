@@ -1,0 +1,2 @@
+# inventering
+Inventera i lokaler
