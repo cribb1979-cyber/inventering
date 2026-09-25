@@ -1,0 +1,123 @@
+#!/bin/bash
+# SYS.VVS — inventering av VVS-verkstaden.
+#
+#   vvsinv              öppna appen
+#   vvsinv --omstart    starta om servern så att ändrad kod laddas
+#   vvsinv --qr         skriv ut telefonadressen och en QR-kod i terminalen
+#
+# Var appen ligger hittas på tre sätt, i tur och ordning:
+#   1. miljövariabeln VVS_MAPP
+#   2. mappen skriptet självt ligger i, om server.py ligger där
+#   3. ~/vvs-inventering
+# Inga sökvägar är hårdkodade, så samma fil fungerar på vilken maskin som helst.
+
+set -u
+
+PORT="${VVS_PORT:-8792}"
+PROFIL="${VVS_PROFIL:-$HOME/.mozilla/firefox/sysvvs.inv}"
+TITEL="SYS.VVS ‖ inventering"
+
+hitta_mapp() {
+    if [ -n "${VVS_MAPP:-}" ] && [ -f "$VVS_MAPP/server.py" ]; then
+        printf '%s' "$VVS_MAPP"; return 0
+    fi
+    local har
+    har="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || true
+    if [ -n "$har" ] && [ -f "$har/server.py" ]; then printf '%s' "$har"; return 0; fi
+    if [ -f "$har/../server.py" ]; then (cd "$har/.." && pwd); return 0; fi
+    if [ -f "$HOME/vvs-inventering/server.py" ]; then
+        printf '%s' "$HOME/vvs-inventering"; return 0
+    fi
+    return 1
+}
+
+MAPP="$(hitta_mapp)" || {
+    echo "vvsinv: hittar inte server.py. Sätt VVS_MAPP till mappen med appen." >&2
+    exit 1
+}
+SERVER="$MAPP/server.py"
+KONFIG="$MAPP/config.json"
+URL="http://127.0.0.1:${PORT}"
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "vvsinv: python3 saknas. Installera med:  sudo apt install python3" >&2
+    exit 1
+fi
+
+OMSTART=0; QR=0
+for arg in "$@"; do
+    case "$arg" in
+        --omstart|omstart) OMSTART=1 ;;
+        --qr|qr)           QR=1 ;;
+    esac
+done
+
+mkdir -p "$MAPP/data/bilder" "$MAPP/data/export"
+
+port_oppen() { (exec 3<>/dev/tcp/127.0.0.1/"$PORT") 2>/dev/null; }
+port_pid()   { ss -ltnpH "sport = :${PORT}" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2; }
+
+lan_ip() {
+    python3 - <<'PY' 2>/dev/null || echo "127.0.0.1"
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+try:
+    s.connect(("10.255.255.255", 1)); print(s.getsockname()[0])
+except Exception:
+    print("127.0.0.1")
+finally:
+    s.close()
+PY
+}
+
+# 1) servern
+if [ "$OMSTART" = 1 ] && port_oppen; then
+    gammal="$(port_pid)"
+    if [ -n "$gammal" ]; then
+        kill "$gammal" 2>/dev/null
+        for _ in $(seq 1 40); do port_oppen || break; sleep 0.25; done
+        port_oppen && { echo "vvsinv: porten $PORT är fortfarande upptagen (pid $gammal)" >&2; exit 1; }
+    fi
+fi
+
+if ! port_oppen; then
+    setsid python3 -u "$SERVER" >>"$MAPP/data/server.log" 2>&1 </dev/null &
+    for _ in $(seq 1 60); do port_oppen && break; sleep 0.25; done
+    if ! port_oppen; then
+        echo "vvsinv: servern startade inte. Se $MAPP/data/server.log" >&2
+        exit 1
+    fi
+fi
+
+# 2) telefonadressen
+TOKEN="$(python3 -c "
+import json
+try: print(json.load(open('$KONFIG')).get('token',''))
+except Exception: print('')" 2>/dev/null)"
+MOBIL="http://$(lan_ip):${PORT}"
+[ -n "$TOKEN" ] && MOBIL="$MOBIL/?t=$TOKEN"
+
+echo "SYS.VVS kör"
+echo "  datorn : $URL"
+echo "  mobil  : $MOBIL"
+if command -v qrencode >/dev/null 2>&1 && [ -n "$TOKEN" ]; then
+    echo
+    qrencode -t ANSIUTF8 "$MOBIL" 2>/dev/null || true
+fi
+command -v notify-send >/dev/null 2>&1 && \
+    notify-send -i sysvvs "SYS.VVS" "Öppna på telefonen:\n$MOBIL" 2>/dev/null || true
+
+if [ "$QR" = 1 ]; then
+    echo
+    echo "Skanna koden ovan, eller skriv in adressen i telefonens webbläsare."
+    exit 0
+fi
+
+# 3) fönstret
+if [ -x "$HOME/.local/bin/sysappfonster" ]; then
+    exec "$HOME/.local/bin/sysappfonster" "$PROFIL" "$URL" "$TITEL"
+fi
+if command -v xdg-open >/dev/null 2>&1; then
+    exec xdg-open "$URL"
+fi
+echo "Öppna $URL i webbläsaren."

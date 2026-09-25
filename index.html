@@ -257,6 +257,7 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <label>Brevtext</label>
       <textarea id="s-text" style="min-height:120px"></textarea>
       <div id="s-fel"></div>
+      <div class="tyst" id="s-konto" style="margin-top:8px"></div>
       <div style="display:flex;gap:9px;margin-top:11px">
         <button class="knapp prim" id="s-knapp" style="flex:1">✉ Skicka kalkylarket</button>
         <button class="knapp flat" id="s-aterstall" style="flex:1">Skriv om brevet</button>
@@ -810,6 +811,16 @@ async function laddaInstallningar() {
     $("#s-text").value = INST.standardbrev || "";
     $("#s-amne").value = "Inventering " + (INST.program || "VVS") + " — " +
       new Date().toLocaleDateString("sv-SE");
+    // Utan e-postkonto ska man få veta det innan man skriver ett brev.
+    if (INST.epost_redo) {
+      $("#s-konto").innerHTML = INST.min_adress
+        ? `Skickas från <b>${esc(INST.min_adress)}</b>` : "";
+    } else {
+      $("#s-konto").innerHTML =
+        '<div class="varning">Inget e-postkonto är ifyllt, så arket kan inte ' +
+        'mejlas härifrån. Använd <b>Kalkylark → ladda ner</b> och bifoga filen ' +
+        'själv, eller lägg in kontot i <code>config.json</code>.</div>';
+    }
     visaKvar();
   } catch (fel) {
     $("#inst-kvitto").textContent = fel.message;

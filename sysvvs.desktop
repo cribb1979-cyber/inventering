@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=SYS.VVS
+GenericName=Inventering
+Comment=Inventera VVS-verkstaden — foto, kalkylark och delning
+Exec=vvsinv
+Icon=sysvvs
+Terminal=false
+Categories=Utility;Office;
+Keywords=inventering;vvs;verkstad;utrustning;kalkylark;skola;
+StartupNotify=true
+StartupWMClass=firefox

@@ -1,9 +1,16 @@
 {
- "token": "byt-ut-mot-en-egen-slumpad-strang",
+ "token": "byter-ut-sig-själv-vid-första-start",
  "port": 8792,
  "ai": {"modell": ""},
- "skola": "Njudungsgymnasiet",
+ "skola": "Praktiska Uppsala",
  "program": "VVS & fastighet",
  "ansvarig": "",
- "deadline": "2026-10-20"
+ "deadline": "2026-10-20",
+ "mejl": {
+  "adress": "",
+  "namn": "",
+  "smtp_server": "smtp.gmail.com",
+  "smtp_port": 465,
+  "losenord": ""
+ }
 }

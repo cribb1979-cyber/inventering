@@ -1,8 +1,9 @@
 """Skicka kalkylarket till ansvarig yrkeslärare.
 
-Lånar e-postkontot som redan är uppsatt för SYS.ASSIST
-(~/assistent/config.json). Ingenting skickas förrän någon trycker Skicka —
-samma regel som i resten av huset.
+E-postkontot läses ur appens egen config.json (nyckeln "mejl"). Finns inget
+där tittar vi i SYS.ASSISTs konfiguration, så att den som redan har satt upp
+ett konto där slipper fylla i det igen. Ingenting skickas förrän någon
+trycker Skicka — samma regel som i resten av huset.
 """
 import email.utils
 import json
@@ -12,19 +13,25 @@ import ssl
 import time
 from email.message import EmailMessage
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+EGEN_CFG = os.path.join(HERE, "config.json")
 ASSISTENT_CFG = os.path.expanduser("~/assistent/config.json")
 
 
-def las_konto():
-    """E-postkontot från SYS.ASSIST. Returnerar {} om inget finns."""
+def _konto_fran(sokvag):
     try:
-        with open(ASSISTENT_CFG, encoding="utf-8") as fh:
+        with open(sokvag, encoding="utf-8") as fh:
             m = (json.load(fh) or {}).get("mejl") or {}
     except Exception:
         return {}
     if not (m.get("adress") and m.get("smtp_server") and m.get("losenord")):
         return {}
     return m
+
+
+def las_konto():
+    """E-postkontot från appens config, annars från SYS.ASSIST. {} om inget."""
+    return _konto_fran(EGEN_CFG) or _konto_fran(ASSISTENT_CFG)
 
 
 def ar_redo():
@@ -43,8 +50,9 @@ def skicka(till, amne, text, bilagor=()):
     """
     konto = las_konto()
     if not konto:
-        return {"fel": "Inget e-postkonto är ifyllt. Öppna SYS.ASSIST → "
-                       "Inställningar → E-post och ange adress och applösenord."}
+        return {"fel": "Inget e-postkonto är ifyllt. Lägg in det under "
+                       '"mejl" i config.json (adress, smtp_server, '
+                       "smtp_port och ett applösenord)."}
     till = (till or "").strip()
     if not till:
         return {"fel": "ingen mottagare"}

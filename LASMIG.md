@@ -14,6 +14,26 @@ när som helst. Telefonen och datorn ser samma sak.
 * startmenyn → SYS.VVS, eller
 * `vvsinv` i en terminal
 
+## Kom igång på en ny dator
+
+```bash
+git clone <adressen-till-repot> vvs-inventering
+cd vvs-inventering
+./installera.sh --modell
+vvsinv
+```
+
+`installera.sh` lägger startfilen i `~/.local/bin`, skrivbordsikonen på plats
+och ritar ikonen. `--modell` hämtar också bildmodellen (ca 3 GB) — hoppa över
+flaggan om du inte vill ha AI-analysen, appen fungerar ändå.
+
+**Det enda som krävs i förväg är `python3`.** Inga paket behöver installeras
+för att appen ska starta. Vill du ha ikonen ritad behövs `python3-pil`, och
+för QR-koden i terminalen `qrencode` — annars visas adressen som text.
+
+Bildanalysen kräver [Ollama](https://ollama.com/download) med modellen
+`qwen2.5vl:3b`. Utan den fungerar allt utom AI-förslagen.
+
 ## På telefonen
 
 1. Starta appen på datorn (`vvsinv --qr` skriver ut adressen och en QR-kod).
@@ -119,10 +139,35 @@ Programmet ärvs automatiskt av nya föremål.
 | `ai.py` | Bildanalys via Ollama |
 | `epost.py` | Skickar kalkylarket som brev |
 | `index.html` | Hela gränssnittet (telefon och dator) |
+| `bin/vvsinv` | Startfilen |
+| `installera.sh` | Sätter upp appen på en ny dator |
+| `sysvvs.desktop` | Skrivbordsikonen och startmenyn |
 | `data/inventering.json` | Inventeringen och historiken |
 | `data/bilder/` | Fotona |
 | `data/export/` | Exporterade kalkylark |
 | `config.json` | Token, port och uppgifterna om skolan (rättighet 600) |
+
+Saknas `config.json` skapas den första gången appen startar, med en egen
+slumpad token. `config.example.json` visar vilka fält som finns.
+
+## E-post
+
+Fliken **Kalkylark** kan mejla arket direkt till yrkesläraren. För det
+behövs ett konto i `config.json`:
+
+```json
+"mejl": {
+  "adress": "du@skola.se",
+  "namn": "Ditt Namn",
+  "smtp_server": "smtp.gmail.com",
+  "smtp_port": 465,
+  "losenord": "applösenord-här"
+}
+```
+
+Använd ett **applösenord**, inte ditt vanliga lösenord. Saknas kontot visas
+ett besked i appen och du kan ladda ner arket och bifoga det själv i stället.
+Finns ett konto uppsatt för SYS.ASSIST lånas det automatiskt.
 
 ## Starta om
 
