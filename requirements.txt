@@ -1,13 +1,5 @@
-# SYS.VVS körs med enbart Pythons standardbibliotek.
-#
-# Den här filen är med flit tom: allt som behövs följer med Python själv.
-# Det gör bygget på en server snabbt och omöjligt att misslyckas på grund av
-# ett paket som inte går att bygga.
-#
-# Vill du ha de lokala extrafunktionerna (skrivbordsikonen och QR-koden i
-# terminalen) installerar du dem så här i stället:
-#
-#     pip install -r requirements-tillval.txt
-#
-# Saknas de fungerar appen ändå — QR-koden visas då som text, och ikonen
-# ritas inte.
+# SYS.VVS behöver nästan ingenting: allt utom QR-koden följer med Python.
+
+# QR-koden i appen (fliken Kalkylark -> "Koppla telefonen").
+# Ren Python utan några beroenden alls — inget som kan gå fel att bygga.
+qrcode>=7

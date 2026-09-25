@@ -276,6 +276,29 @@ class Svar(BaseHTTPRequestHandler):
             return False
         return self.client_address[0] in LOKALA
 
+    def _bas_url(self):
+        """Adressen telefonen ska öppna — rätt adress, på rätt plats.
+
+        Bakom en proxy (Render m.fl.) kommer den riktiga adressen och
+        protokollet i X-Forwarded-*. Att i stället gissa på datorns
+        nätverksadress vore fel: i molnet finns ingen sådan adress, och den
+        QR-kod man då fick pekade på en intern maskin som telefonen inte når.
+
+        Lokalt finns inga X-Forwarded-huvuden alls, och då gäller datorns
+        adress på nätet precis som förut.
+        """
+        proxad = (self.headers.get("X-Forwarded-Host")
+                  or self.headers.get("X-Forwarded-Proto"))
+        if proxad:
+            # Proxyn kan skicka en kommaseparerad lista; den första gäller.
+            namn = (self.headers.get("X-Forwarded-Host")
+                    or self.headers.get("Host") or "").split(",")[0].strip()
+            schema = (self.headers.get("X-Forwarded-Proto")
+                      or "https").split(",")[0].strip()
+            if namn:
+                return f"{schema}://{namn}"
+        return f"http://{lan_ip()}:{PORT}"
+
     def _autentiserad(self):
         """Lokala anrop släpps igenom utan token, allt annat kräver rätt token."""
         if self._lokal():
@@ -311,7 +334,7 @@ class Svar(BaseHTTPRequestHandler):
             if v == "/api/status":
                 cfg = las_config()
                 self._json(200, {"version": lager.las()["version"],
-                                 "lan": f"http://{lan_ip()}:{PORT}",
+                                 "mobil": self._bas_url(),
                                  "lokal": f"http://127.0.0.1:{PORT}",
                                  "token": cfg["token"],
                                  "bildmodell": ai.valj_modell(cfg),
@@ -387,18 +410,26 @@ class Svar(BaseHTTPRequestHandler):
             self._send(200, fh.read(), typ, {"Cache-Control": "max-age=3600"})
 
     def _qr(self):
-        """QR-kod till telefonens adress, så man slipper skriva in den."""
+        """QR-kod till telefonens adress, så man slipper skriva in den.
+
+        Skrivs som SVG i stället för PNG. Då räcker qrcode-paketet, som är ren
+        Python utan beroenden — Pillow behövs inte, och det är just Pillow som
+        saknas på en server. Bilden blir dessutom skarp i alla storlekar.
+        """
         try:
             import io
             import qrcode
-            cfg = las_config()
-            url = f"http://{lan_ip()}:{PORT}/?t={cfg['token']}"
-            img = qrcode.make(url, box_size=6, border=2)
-            buf = io.BytesIO()
-            img.save(buf, "PNG")
-            self._send(200, buf.getvalue(), "image/png")
+            import qrcode.image.svg
         except ImportError:
             self._fel(501, "qrcode-modulen saknas")
+            return
+        cfg = las_config()
+        url = f"{self._bas_url()}/?t={urllib.parse.quote(cfg['token'])}"
+        img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage,
+                          box_size=12, border=3)
+        buf = io.BytesIO()
+        img.save(buf)
+        self._send(200, buf.getvalue(), "image/svg+xml")
 
     def _kalkyl(self, u):
         q = urllib.parse.parse_qs(u.query)

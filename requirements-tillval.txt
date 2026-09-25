@@ -1,9 +1,6 @@
-# Frivilliga paket, bara för den som kör appen lokalt på Linux.
+# Frivilligt, och bara för den som kör appen lokalt på Linux.
 # Behövs inte på en server och behövs inte för att appen ska starta.
 
-# Ritar skrivbordsikonen (installera.sh -> ikon.py)
+# Ritar skrivbordsikonen (installera.sh -> ikon.py).
+# QR-koden behöver INTE detta — den skrivs som SVG.
 Pillow>=10
-
-# QR-koden i terminalen (vvsinv --qr). Saknas den visas adressen som text.
-# I webbläsaren finns QR-koden ändå, via fliken Kalkylark.
-qrcode>=7

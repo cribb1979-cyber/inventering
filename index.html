@@ -895,7 +895,7 @@ async function polla() {
       ? "bild-AI: " + esc(MODELL)
       : 'ingen bildmodell — på datorn: <code>ollama pull ' +
         esc(d.standard_modell || "qwen2.5vl:3b") + "</code>";
-    $("#mobilurl").textContent = d.lan + "/?t=" + d.token;
+    $("#mobilurl").textContent = d.mobil + "/?t=" + d.token;
     if (!INST.deadline_text && d.deadline) {     // reservväg om hämtningen föll
       INST.deadline_text = d.deadline;
       INST.dagar_kvar = d.dagar_kvar;
