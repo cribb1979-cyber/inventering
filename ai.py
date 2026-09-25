@@ -74,12 +74,14 @@ def _bild_base64(sokvag, maxsida=1024):
 
 
 SYSTEM = """Du inventerar en VVS-verkstad på en skola. Du får en bild och ska
-föreslå vad föremålet är. Svara BARA med JSON, ingen förklaring utanför JSON.
+lista ALLT som syns på den. En bild kan visa flera saker — en bänk med tio
+kopplingar, en hylla med verktyg, ett svetsaggregat bredvid en slangvinda.
+Då blir det flera rader i svaret. Svara BARA med JSON, ingen text utanför.
 
-Fälten:
+Fälten per föremål:
   namn        kort svensk benämning på det du faktiskt ser
   kategori    en av: maskin, verktyg, material, inredning, skydd, forbrukning, annat
-  antal       hur många du ser (heltal, 1 om du är osäker)
+  antal       hur många du ser av just den saken (heltal, 1 om du är osäker)
   enhet       st, m, kg, par, rulle, liter
   dimension   dimension eller artikelbeteckning om den syns, annars tom sträng
   tillverkare märke om det syns på bilden, annars tom sträng
@@ -87,25 +89,31 @@ Fälten:
   investeringsbehov  en av: behall, investera, avveckla, vetej
               sätt "investera" bara om föremålet ser ut att behöva ersättas
               eller är för slitet för undervisning — annars "vetej"
-  anteckning  en kort iakttagelse om just den här bilden
+  anteckning  en kort iakttagelse om just den saken
   sakerhet    osäker om du gissar, saker om du är tydligt säker
 
 Svarets form är alltid, med tomma värden där du inte vet:
 
-{"namn":"","kategori":"","antal":0,"enhet":"","dimension":"",
- "tillverkare":"","skick":"","investeringsbehov":"","anteckning":"",
- "sakerhet":""}
+{"foremal":[
+ {"namn":"","kategori":"","antal":0,"enhet":"","dimension":"",
+  "tillverkare":"","skick":"","investeringsbehov":"","anteckning":"",
+  "sakerhet":""}
+]}
 
 Formen är bara ett skal — den är tom med flit. Fyll den med det du ser i
 *den här* bilden. Skriv aldrig ett exempelföremål: ser du ingen skruvdragare
-ska ordet skruvdragare inte stå i svaret. Skriv inte punkter eller frågetecken
-i stället för ett värde; lämna fältet tomt.
+ska ordet skruvdragare inte stå i svaret. Anta inte att bilden visar ett
+verktyg bara för att du inventerar en verkstad. Skriv inte punkter eller
+frågetecken i stället för ett värde; lämna fältet tomt.
+
+En sak per rad. Syns samma sak flera gånger skriver du antalet i "antal" i
+stället för att upprepa raden. Ta med allt som går att inventera — även
+bänkar, skåp och inredning. Hoppa över bakgrund som väggar och golv.
 
 Hitta inte på ett märke eller en dimension som inte syns i bilden. Är du
 osäker sätter du sakerhet till "osäker" och lämnar fältet tomt i stället.
-Kan du inte alls se vad bilden föreställer sätter du namn till "" och
-sakerhet till "osäker". Sätt ALDRIG ett pris — priser gissar vi inte, de ska
-sättas av en människa."""
+Kan du inte alls se vad bilden föreställer svarar du {"foremal":[]}.
+Sätt ALDRIG ett pris — priser gissar vi inte, de ska sättas av en människa."""
 
 
 def _plocka_json(text):
@@ -176,11 +184,32 @@ def _stada(forslag):
     return ut
 
 
-def analysera(sokvag, cfg=None, timeout=180):
-    """Analyserar en bild och returnerar ett förslag.
+def _dubbletter(sparade):
+    """Slår ihop föremål med samma namn och kategori till en rad.
 
-    Returnerar alltid ett diktat: antingen {"forslag": {...}, "modell": ...}
-    eller {"fel": "..."} med en förklaring som går att visa för användaren.
+    En bild på tio likadana kopplingar ska bli *en* rad med antal 10, inte tio
+    rader — annars får yrkesläraren ett ark som är omöjligt att läsa."""
+    ut = {}
+    for f in sparade:
+        nyckel = (f.get("namn", "").lower(), f.get("kategori", ""))
+        if nyckel in ut:
+            ut[nyckel]["antal"] = (float(ut[nyckel].get("antal") or 0)
+                                   + float(f.get("antal") or 1))
+            if ut[nyckel]["antal"] == int(ut[nyckel]["antal"]):
+                ut[nyckel]["antal"] = int(ut[nyckel]["antal"])
+            if f.get("sakerhet") == "osäker":
+                ut[nyckel]["sakerhet"] = "osäker"
+        else:
+            ut[nyckel] = dict(f)
+    return list(ut.values())
+
+
+def analysera(sokvag, cfg=None, timeout=180):
+    """Analyserar en bild och returnerar ett eller flera förslag.
+
+    Returnerar alltid ett diktat: antingen
+    {"forslag": [ {...}, ... ], "modell": ...} eller {"fel": "..."} med en
+    förklaring som går att visa för användaren.
     """
     modell = valj_modell(cfg)
     if not modell:
@@ -197,7 +226,11 @@ def analysera(sokvag, cfg=None, timeout=180):
         return {"fel": f"Kunde inte läsa bilden: {exc}"}
 
     kropp = {"model": modell, "stream": False, "format": "json",
-             "options": {"temperature": 0.1},
+             "options": {"temperature": 0.1, "num_predict": 1500},
+             # Håll modellen i minnet. Första anropet tar ~80 s (den laddas då),
+             # sedan några sekunder. Utan detta hinner den somna mellan varven
+             # och telefonen får vänta varje gång.
+             "keep_alive": "30m",
              "messages": [{"role": "user", "content": SYSTEM, "images": [bild]}]}
     req = urllib.request.Request(OLLAMA + "/api/chat",
                                  data=json.dumps(kropp).encode("utf-8"),
@@ -213,12 +246,60 @@ def analysera(sokvag, cfg=None, timeout=180):
         return {"fel": f"Kunde inte nå modellen: {type(exc).__name__}: {exc}"}
 
     text = ((svar.get("message") or {}).get("content") or "").strip()
-    forslag = _stada(_plocka_json(text))
-    if not forslag.get("namn"):
+    data = _plocka_json(text)
+
+    # Modellen kan svara med en lista, med {"foremal": [...]} eller — om den
+    # är liten — med ett enda föremål. Alla tre ska bli en lista här.
+    if isinstance(data, dict) and isinstance(data.get("foremal"), list):
+        rå = data["foremal"]
+    elif isinstance(data, dict) and isinstance(data.get("forslag"), list):
+        rå = data["forslag"]
+    elif isinstance(data, list):
+        rå = data
+    elif isinstance(data, dict):
+        rå = [data]
+    else:
+        rå = []
+
+    sparade = []
+    for ett in rå[:20]:
+        f = _stada(ett)
+        if not f.get("namn"):
+            continue                    # utan namn finns inget att inventera
+        f.setdefault("antal", 1)
+        f.setdefault("enhet", "st")
+        f.setdefault("skick", "ok")
+        sparade.append(f)
+
+    if not sparade:
         return {"fel": "Modellen kunde inte avgöra vad bilden visar. "
                        "Skriv namnet själv — bilden sparas ändå.",
                 "modell": modell, "text": text[:400]}
-    forslag.setdefault("antal", 1)
-    forslag.setdefault("enhet", "st")
-    forslag.setdefault("skick", "ok")
-    return {"forslag": forslag, "modell": modell}
+
+    forslag = _dubbletter(sparade)
+    return {"forslag": forslag, "modell": modell, "antal_forslag": len(forslag)}
+
+
+def varm(cfg=None, timeout=240):
+    """Laddar in modellen i förväg.
+
+    Första anropet tar omkring 80 sekunder eftersom modellen då läses in i
+    minnet. Gör vi det när servern startar slipper den som fotar med telefonen
+    sitta och vänta på det. Misslyckas det är det ingen fara — då laddas
+    modellen vid första bilden i stället.
+    """
+    modell = valj_modell(cfg)
+    if not modell:
+        return False
+    kropp = {"model": modell, "stream": False, "keep_alive": "30m",
+             "messages": [{"role": "user", "content": "ok"}]}
+    req = urllib.request.Request(OLLAMA + "/api/chat",
+                                 data=json.dumps(kropp).encode("utf-8"),
+                                 method="POST")
+    req.add_header("content-type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            resp.read()
+        return True
+    except Exception:
+        return False

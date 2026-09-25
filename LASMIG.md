@@ -1,9 +1,9 @@
 # SYS.VVS — inventering av VVS-verkstaden
 
 Inventerar utrustningen i VVS-verkstadens lokaler: maskiner, verktyg,
-material och inredning. Fotar man ett föremål med telefonen föreslår en
-lokal AI vad det är. Allt hamnar i ett kalkylark som går att exportera och
-dela med yrkesläraren för programmet.
+material och inredning. Fotar man ett föremål med telefonen analyserar en
+lokal AI vad bilden visar och föreslår allt som finns på den. Allt hamnar i
+ett kalkylark som går att exportera och dela med yrkesläraren för programmet.
 
 Inventeringen är **levande** — föremål kan ändras, räknas av och läggas till
 när som helst. Telefonen och datorn ser samma sak.
@@ -30,9 +30,27 @@ och skickas aldrig vidare någon annanstans.
 | Flik | Vad som händer |
 |---|---|
 | **Inventering** | Allt som finns, sorterat per kategori. Här räknar du av (−/+) och ändrar uppgifter. |
-| **Lägg till** | Skriv in ett föremål, eller **ta ett foto** — AI:n föreslår namn, kategori, antal, skick och investeringsbehov. |
+| **Lägg till** | Skriv in ett föremål, eller **ta ett foto** — AI:n listar allt den ser i bilden. |
 | **Kalkylark** | Sammanställning per investeringsbehov, export till Excel/CSV och knappen som mejlar arket till yrkesläraren. |
 | **Historik** | Varje ändring, vem som gjorde den och när. |
+
+## Foto och AI
+
+Tryck **Ta en bild**. Kameran öppnas, bilden skalas ner i telefonen och
+skickas till datorn. AI:n tittar på *hela* bilden och listar allt som går att
+inventera — en bänk med tio kopplingar blir en rad med antal 10, inte tio
+rader. Hittar den flera saker får varje sak ett eget kort:
+
+* bocka av det du inte vill ha,
+* **Ändra** öppnar kortet i formuläret om något är fel,
+* **Lägg till valda** lägger in dem i inventeringen.
+
+Hittar den bara en sak fylls formuläret i direkt i stället. **Ingenting sparas
+förrän du trycker.** Hittar den ingenting säger den det — den hittar inte på
+ett föremål som inte finns i bilden.
+
+Modellen laddas in när servern startar, så första fotot är snabbt. Sedan
+några sekunder per bild.
 
 ## Investeringsbehov
 

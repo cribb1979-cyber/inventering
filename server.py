@@ -448,8 +448,10 @@ class Svar(BaseHTTPRequestHandler):
         svar = ai.analysera(stig, las_config())
         svar["fil"] = namn
         svar["kb"] = len(rå) // 1024
-        if svar.get("forslag"):
-            self._logg("analys", f"{namn}: {svar['forslag'].get('namn')}")
+        forslag = svar.get("forslag") or []
+        if forslag:
+            namnlista = ", ".join(f.get("namn", "?") for f in forslag[:6])
+            self._logg("analys", f"{namn}: {len(forslag)} st — {namnlista}")
         elif svar.get("fel"):
             self._logg("analys_fel", svar["fel"][:150])
         self._json(200, svar)
@@ -468,6 +470,18 @@ def main():
     print(f"  poster : {len(lager.las()['poster'])} i inventeringen")
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Svar)
     srv.daemon_threads = True
+
+    # Värm bildmodellen i bakgrunden. Den som fotar med telefonen ska inte
+    # behöva vänta på att modellen laddas in första gången.
+    if modell:
+        def _varm():
+            t0 = time.time()
+            if ai.varm(cfg):
+                print(f"  modellen är inläst ({time.time() - t0:.0f} s)")
+            else:
+                print("  kunde inte läsa in modellen i förväg")
+        threading.Thread(target=_varm, daemon=True).start()
+
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

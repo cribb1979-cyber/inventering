@@ -100,6 +100,25 @@ textarea{min-height:64px;resize:vertical}
   border-radius:var(--radie);padding:11px 12px;font-size:13px;margin-bottom:11px}
 .fel{background:#331717;border-color:#6b2626;color:#ffd9d6}
 .okboks{background:#16301f;border-color:#245c33;color:#c9f0d6}
+/* AI:n kan hitta flera saker i samma bild. Varje sak blir ett eget kort som
+   går att bocka av innan man lägger till. */
+.f-sak{display:flex;align-items:center;gap:10px;background:var(--panel2,#1b1b20);
+  border:1px solid var(--line);border-radius:var(--radie);padding:9px 10px;
+  margin-bottom:7px;cursor:pointer}
+.f-sak input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;accent-color:#4f9d69}
+.f-sak .f-text{flex:1;min-width:0;font-size:13.5px;line-height:1.35}
+.f-sak .f-text b{display:block}
+.f-sak .f-antal{color:#9fd6b0}
+.f-sak.osaker{border-color:#6b5416}
+.f-sak.av{opacity:.45}
+.f-knappar{display:flex;gap:9px;margin-top:9px}
+.f-knappar .knapp{flex:1}
+/* Kort besked nederst, t.ex. efter att AI-förslag lagts till. */
+#toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%) translateY(14px);
+  background:#1f3a26;border:1px solid #2f5c39;color:#cdf0d8;font-size:13.5px;
+  padding:10px 15px;border-radius:11px;z-index:60;opacity:0;pointer-events:none;
+  transition:opacity .18s,transform .18s;max-width:92vw;text-align:center}
+#toast.pa{opacity:1;transform:translateX(-50%) translateY(0)}
 .modal{position:fixed;inset:0;background:#000a;z-index:50;display:none;
   align-items:flex-end;justify-content:center}
 .modal.pa{display:flex}
@@ -215,7 +234,7 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <div class="namn">Inventeringens uppgifter</div>
       <div class="meta">Följer med som rubrik i kalkylarket</div>
       <div class="par">
-        <div><label>Skola</label><input id="i-skola" placeholder="Njudungsgymnasiet"></div>
+        <div><label>Skola</label><input id="i-skola" placeholder="Praktiska Uppsala"></div>
         <div><label>Program</label><input id="i-program" placeholder="VVS &amp; fastighet"></div>
       </div>
       <div class="par">
@@ -259,6 +278,7 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
     <div id="logg"></div>
   </section>
 </main>
+<div id="toast"></div>
 
 <nav>
   <button class="pa" data-vy="inventering"><span class="ikon">📋</span>Inventering</button>
@@ -547,6 +567,36 @@ function krymp(fil, maxsida = 1600, kvalitet = 0.85) {
   });
 }
 
+/* AI:n svarar med en *lista* — en bild kan visa flera saker. Ett kort per
+   sak, bocka av det du inte vill ha, tryck Lägg till. */
+let FORSLAG = [];
+let toastTid = null;
+
+function visaToast(text) {
+  const t = $("#toast");
+  if (!t) return;
+  t.textContent = text;
+  t.classList.add("pa");
+  clearTimeout(toastTid);
+  toastTid = setTimeout(() => t.classList.remove("pa"), 3200);
+}
+
+function ettKort(f, i) {
+  const osaker = f.sakerhet === "osäker";
+  const detaljer = [sortsNamn(f.kategori), f.dimension, f.tillverkare]
+    .filter(Boolean).join(" · ");
+  return `<label class="f-sak ${osaker ? "osaker" : ""}" data-rad="${i}">
+    <input type="checkbox" class="f-val" data-i="${i}" checked>
+    <span class="f-text">
+      <b>${esc(f.namn)}${f.antal > 1 ? ` <span class="f-antal">× ${esc(nummer(f.antal))} ${esc(f.enhet || "")}</span>` : ""}</b>
+      ${detaljer ? `<span class="tyst">${esc(detaljer)}</span>` : ""}
+      ${osaker ? ` <span class="tyst">· AI är osäker</span>` : ""}
+      ${f.anteckning ? `<br><span class="tyst">${esc(f.anteckning)}</span>` : ""}
+    </span>
+    <button type="button" class="knapp flat liten" data-andra="${i}">Ändra</button>
+  </label>`;
+}
+
 function visaForslag(d) {
   if (d.fel) {
     $("#analysruta").innerHTML = `<div class="varning">${esc(d.fel)}</div>`;
@@ -554,25 +604,108 @@ function visaForslag(d) {
     $("#f-bild").value = d.fil;
     return;
   }
-  const f = d.forslag || {};
-  if (f.namn) $("#f-namn").value = f.namn;
-  if (f.kategori) $("#f-kategori").value = f.kategori;
-  if (f.antal) $("#f-antal").value = f.antal;
-  if (f.enhet) $("#f-enhet").value = f.enhet;
-  if (f.dimension) $("#f-dimension").value = f.dimension;
-  if (f.tillverkare) $("#f-tillverkare").value = f.tillverkare;
-  if (f.anteckning) $("#f-anteckning").value = f.anteckning;
-  if (f.skick) $("#f-skick").value = f.skick;
-  if (f.investeringsbehov) $("#f-behov").value = f.investeringsbehov;
+  const lista = Array.isArray(d.forslag) ? d.forslag : (d.forslag ? [d.forslag] : []);
+  if (!lista.length) {
+    $("#analysruta").innerHTML = '<div class="varning">AI:n hittade ingenting i bilden.</div>';
+    if (d.fil) $("#f-bild").value = d.fil;
+    return;
+  }
+  FORSLAG = lista;
   if (d.fil) $("#f-bild").value = d.fil;
-  const osaker = f.sakerhet === "osäker";
+
+  // Ett enda föremål: fyll formuläret direkt, det är snabbast på en telefon.
+  if (lista.length === 1) {
+    const f = lista[0];
+    if (f.namn) $("#f-namn").value = f.namn;
+    if (f.kategori) $("#f-kategori").value = f.kategori;
+    if (f.antal) $("#f-antal").value = f.antal;
+    if (f.enhet) $("#f-enhet").value = f.enhet;
+    if (f.dimension) $("#f-dimension").value = f.dimension;
+    if (f.tillverkare) $("#f-tillverkare").value = f.tillverkare;
+    if (f.anteckning) $("#f-anteckning").value = f.anteckning;
+    if (f.skick) $("#f-skick").value = f.skick;
+    if (f.investeringsbehov) $("#f-behov").value = f.investeringsbehov;
+    const osaker = f.sakerhet === "osäker";
+    $("#analysruta").innerHTML =
+      `<div class="varning ${osaker ? "" : "okboks"}">
+        <b>${osaker ? "AI är osäker — kontrollera fälten" : "AI-förslag ifyllt"}</b><br>
+        ${esc([f.namn, f.dimension, f.tillverkare].filter(Boolean).join(" · "))}
+        <span class="tyst">(${esc(d.modell || "modell")})</span><br>
+        Ingenting sparas förrän du trycker Spara.
+      </div>`;
+    return;
+  }
+
+  // Flera föremål: visa dem som en lista att bocka av och lägga till.
   $("#analysruta").innerHTML =
-    `<div class="varning ${osaker ? "" : "okboks"}">
-      <b>${osaker ? "AI är osäker — kontrollera fälten" : "AI-förslag ifyllt"}</b><br>
-      ${esc([f.namn, f.dimension, f.tillverkare].filter(Boolean).join(" · "))}
-      <span class="tyst">(${esc(d.modell || "modell")})</span><br>
-      Ingenting sparas förrän du trycker Spara.
+    `<div class="varning okboks">
+      <b>AI hittade ${esc(nummer(lista.length))} saker i bilden</b><br>
+      Bocka av det du vill ha och tryck <b>Lägg till valda</b>.
+      Ingenting sparas förrän du gör det.
+      <span class="tyst">(${esc(d.modell || "modell")})</span>
+    </div>
+    <div id="forslagslista">${lista.map(ettKort).join("")}</div>
+    <div class="f-knappar">
+      <button type="button" class="knapp prim" id="f-laggvalda"></button>
+      <button type="button" class="knapp flat" id="f-laggalla">Lägg till alla</button>
     </div>`;
+
+  const markera = () => {
+    let n = 0;
+    for (const c of document.querySelectorAll(".f-val")) {
+      const rad = c.closest(".f-sak");
+      rad.classList.toggle("av", !c.checked);
+      if (c.checked) n++;
+    }
+    $("#f-laggvalda").textContent = n ? `Lägg till valda (${n})` : "Lägg till valda";
+    $("#f-laggvalda").disabled = !n;
+  };
+  for (const c of document.querySelectorAll(".f-val")) c.addEventListener("change", markera);
+  for (const b of document.querySelectorAll("[data-andra]")) {
+    b.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      const f = FORSLAG[Number(b.dataset.andra)];
+      if (f) { laggUppFormulär(Object.assign({bild: d.fil}, f), d.fil); }
+    });
+  }
+  $("#f-laggvalda").addEventListener("click", () => laggTillValda(d.fil, () =>
+    [...document.querySelectorAll(".f-val")].filter(c => c.checked).map(c => Number(c.dataset.i))));
+  $("#f-laggalla").addEventListener("click", () => laggTillValda(d.fil, () => FORSLAG.map((_, i) => i)));
+  markera();
+}
+
+async function laggTillValda(bild, valj) {
+  const valda = valj();
+  if (!valda.length) return;
+  const knappar = ["#f-laggvalda", "#f-laggalla"].map(s => $(s)).filter(Boolean);
+  knappar.forEach(k => { k.disabled = true; });
+  let n = 0, fel = [];
+  for (const i of valda) {
+    const f = FORSLAG[i];
+    if (!f || !f.namn) continue;
+    try {
+      const d = await api("/api/ny", {
+        namn: f.namn, kategori: f.kategori, antal: f.antal, enhet: f.enhet,
+        dimension: f.dimension, tillverkare: f.tillverkare, skick: f.skick,
+        anteckning: f.anteckning, investeringsbehov: f.investeringsbehov,
+        bild: bild || "",
+      });
+      DATA.poster.push(d.post);
+      synkaVersion(d.version);
+      n++;
+    } catch (e) {
+      fel.push(`${f.namn}: ${e.message}`);
+    }
+  }
+  knappar.forEach(k => { k.disabled = false; });
+  if (fel.length) {
+    $("#analysruta").innerHTML =
+      `<div class="varning fel">${esc(nummer(n))} tillagda, men: ${esc(fel.join("; "))}</div>`;
+  } else {
+    nollstall();
+  }
+  rita();
+  if (n) visaToast(`${nummer(n)} tillagda i inventeringen`);
 }
 
 function laggUppFormulär(post, bild, dataUrl) {
