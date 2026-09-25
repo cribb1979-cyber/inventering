@@ -13,8 +13,11 @@ import ssl
 import time
 from email.message import EmailMessage
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-EGEN_CFG = os.path.join(HERE, "config.json")
+import stigar
+
+# Appens egen config.json — samma fil som servern läser, även när den ligger
+# på en monterad disk i molnet (VVS_CONFIG).
+EGEN_CFG = stigar.CONFIG
 ASSISTENT_CFG = os.path.expanduser("~/assistent/config.json")
 
 
@@ -29,9 +32,26 @@ def _konto_fran(sokvag):
     return m
 
 
+def _konto_fran_miljon():
+    """Kontot från miljövariabler. Så skickas post från en server, där
+    lösenordet aldrig får ligga i en fil i kodträdet."""
+    m = {}
+    for nyckel, namn in (("adress", "VVS_MEJL_ADRESS"), ("namn", "VVS_MEJL_NAMN"),
+                         ("smtp_server", "VVS_MEJL_SMTP_SERVER"),
+                         ("smtp_port", "VVS_MEJL_SMTP_PORT"),
+                         ("losenord", "VVS_MEJL_LOSENORD")):
+        v = (os.environ.get(namn) or "").strip()
+        if v:
+            m[nyckel] = v
+    if not (m.get("adress") and m.get("smtp_server") and m.get("losenord")):
+        return {}
+    m.setdefault("smtp_port", 465)
+    return m
+
+
 def las_konto():
-    """E-postkontot från appens config, annars från SYS.ASSIST. {} om inget."""
-    return _konto_fran(EGEN_CFG) or _konto_fran(ASSISTENT_CFG)
+    """E-postkontot: först miljön, sedan appens config, sist SYS.ASSIST."""
+    return _konto_fran_miljon() or _konto_fran(EGEN_CFG) or _konto_fran(ASSISTENT_CFG)
 
 
 def ar_redo():
@@ -58,6 +78,13 @@ def skicka(till, amne, text, bilagor=()):
         return {"fel": "ingen mottagare"}
     if "@" not in till:
         return {"fel": f"'{till}' ser inte ut som en e-postadress"}
+    # Radbrytningar i mottagare eller ämne är ett sätt att lura in egna
+    # rubriker i brevet (t.ex. en hemlig kopia). Biblioteket stoppar det,
+    # men med ett engelskt tekniskt fel — här blir beskedet begripligt.
+    for namn, v in (("mottagaren", till), ("ämnet", amne or "")):
+        if "\n" in v or "\r" in v:
+            return {"fel": f"{namn} får inte innehålla radbrytning"}
+    amne = " ".join((amne or "").split())        # en rad, inga dubbelblanksteg
     msg = EmailMessage()
     msg["From"] = email.utils.formataddr((konto.get("namn") or "", konto["adress"]))
     msg["To"] = till

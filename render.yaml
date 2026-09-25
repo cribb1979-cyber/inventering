@@ -1,0 +1,37 @@
+# Render-blueprint. Lägg repot på GitHub, välj "New +" -> "Blueprint" i
+# Render och peka på repot, så läses den här filen in och allt sätts upp.
+#
+# Efteråt måste två saker fyllas i under Environment (de är hemliga och får
+# inte stå i filen): VVS_TOKEN och VVS_AI_NYCKEL. Se DEPLOY.md.
+services:
+  - type: web
+    name: sysvvs-inventering
+    runtime: python
+    plan: starter            # starter krävs för att en disk ska kunna monteras
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 server.py
+    healthCheckPath: /       # startsidan är öppen; /api/* kräver token
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: VVS_KRAV_TOKEN  # proxy -> alla besök ser ut att vara lokala
+        value: "1"
+      - key: VVS_DATA       # disken nedan monteras här
+        value: /var/data
+      - key: VVS_CONFIG
+        value: /var/data/config.json
+      - key: VVS_AI_LEVERANTOR
+        value: gemini
+      - key: VVS_TOKEN      # fylls i i Render, sync: false = frågas efter
+        sync: false
+      - key: VVS_AI_NYCKEL
+        sync: false
+      # Frivilligt — fyll i för att slippa skriva in det i appen:
+      # - key: VVS_SKOLA
+      #   value: Praktiska Uppsala
+      # - key: VVS_PROGRAM
+      #   value: VVS
+    disk:
+      name: vvsdata
+      mountPath: /var/data
+      sizeGB: 1

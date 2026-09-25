@@ -8,11 +8,23 @@ ett kalkylark som går att exportera och dela med yrkesläraren för programmet.
 Inventeringen är **levande** — föremål kan ändras, räknas av och läggas till
 när som helst. Telefonen och datorn ser samma sak.
 
+> Ska appen fungera **utan att datorn är påslagen**, eller från telefonen
+> utanför skolans nät? Följ då **`DEPLOY.md`** i stället. Den här filen
+> beskriver den lokala varianten, där ingenting lämnar datorn.
+
 ## Öppna
 
 * Skrivbordsikonen **SYS.VVS**, eller
 * startmenyn → SYS.VVS, eller
 * `vvsinv` i en terminal
+
+## Snabb översikt
+
+| Vill du… | Läs |
+|---|---|
+| Köra på datorn, telefonen på samma nät | den här filen |
+| Köra utan att datorn är på (Render) | `DEPLOY.md` |
+| Förstå varför Netlify inte går | `MOLN.md` |
 
 ## Kom igång på en ny dator
 
@@ -44,6 +56,12 @@ Bildanalysen kräver [Ollama](https://ollama.com/download) med modellen
 Adressen innehåller en token. Utan token nekar servern allt utifrån; från
 datorn (127.0.0.1) behövs ingen. Token ligger i `config.json` (rättighet 600)
 och skickas aldrig vidare någon annanstans.
+
+> Behöver telefonen fungera även när datorn är avstängd, eller utanför
+> skolans nätverk? Då ska appen ligga på en server i stället. Se
+> **`DEPLOY.md`** — där står hela vägen steg för steg. Det som ändras då är
+> att bildanalysen skickas till en molntjänst i stället för att köras lokalt,
+> och att fotona därför lämnar datorn.
 
 ## Vad den gör
 
@@ -113,6 +131,9 @@ Appen **raderar inte och skickar inte** något på egen hand. Radering och
 utskick kräver att du bekräftar i en ruta. Alla bilder stannar på datorn —
 bildanalysen körs lokalt i Ollama, inga foton lämnar maskinen.
 
+> Det gäller den **lokala** varianten. Körs appen i molnet skickas fotot till
+> en molntjänst för analys — se `MOLN.md`.
+
 ## Om AI:n
 
 Bildanalysen använder en lokal bildmodell (`qwen2.5vl:3b` som standard).
@@ -123,6 +144,9 @@ sätter aldrig ett pris.
 Hämta modellen med:
 
     ollama pull qwen2.5vl:3b
+
+Kör appen i molnet finns ingen lokal modell. Då används en molntjänst i
+stället och fotona skickas dit — se `DEPLOY.md` och `MOLN.md`.
 
 ## Inställningar
 
@@ -135,13 +159,16 @@ Programmet ärvs automatiskt av nya föremål.
 |---|---|
 | `server.py` | Servern, alla sidor och anrop |
 | `lager.py` | Själva inventeringen — läsa, ändra, räkna av, historik |
+| `stigar.py` | Var filerna ligger (går att flytta med `VVS_DATA`) |
 | `kalkyl.py` | Bygger kalkylarket (Excel och CSV) |
-| `ai.py` | Bildanalys via Ollama |
+| `ai.py` | Bildanalys — lokalt via Ollama, eller mot en molntjänst |
 | `epost.py` | Skickar kalkylarket som brev |
 | `index.html` | Hela gränssnittet (telefon och dator) |
 | `bin/vvsinv` | Startfilen |
 | `installera.sh` | Sätter upp appen på en ny dator |
 | `sysvvs.desktop` | Skrivbordsikonen och startmenyn |
+| `DEPLOY.md` | Guiden för att lägga appen på nätet |
+| `MOLN.md` | Bakgrunden: varför Netlify inte går, vad molnet kostar |
 | `data/inventering.json` | Inventeringen och historiken |
 | `data/bilder/` | Fotona |
 | `data/export/` | Exporterade kalkylark |

@@ -23,15 +23,24 @@ import ai
 import epost
 import kalkyl
 import lager
+import stigar
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-DATA = os.path.join(HERE, "data")
-BILDER = os.path.join(DATA, "bilder")
-EXPORT = os.path.join(DATA, "export")
-CONFIG = os.path.join(HERE, "config.json")
-PORT = int(os.environ.get("VVS_PORT", "8792"))
+# Sökvägarna kommer från stigar.py, så att de går att flytta till en monterad
+# disk med VVS_DATA när appen kör i molnet.
+HERE = stigar.HERE
+DATA = stigar.DATA
+BILDER = stigar.BILDER
+EXPORT = stigar.EXPORT
+CONFIG = stigar.CONFIG
+PORT = int(os.environ.get("VVS_PORT") or os.environ.get("PORT") or "8792")
 MAX_KROPP = 30 * 1024 * 1024          # telefonbilder är stora men inte så stora
 LOKALA = {"127.0.0.1", "::1"}
+
+# I molnet kommer varje besök via plattformens proxyserver. Om den ansluter
+# från 127.0.0.1 ser appen alla besök som "lokala" och släpper in dem utan
+# token — autentiseringen skulle vara avstängd utan att någon märkte det.
+# Sätt VVS_KRAV_TOKEN=1 på en server så krävs token även från 127.0.0.1.
+KRAV_TOKEN_ALLA = os.environ.get("VVS_KRAV_TOKEN", "") not in ("", "0", "nej")
 
 
 def lan_ip():
@@ -46,6 +55,44 @@ def lan_ip():
         s.close()
 
 
+# Nycklar som satts via miljövariabler, t.ex. på en server. Läses om vid varje
+# las_config(). Det är ingen kapplöpning mellan trådarna: värdet byggs bara av
+# miljövariablerna, och de ändras inte medan programmet kör. Alla trådar
+# räknar alltså fram exakt samma sak.
+FRAN_MILJO = {}
+
+# Bara de här fälten är hemliga och får aldrig skrivas till disk *när de
+# kommer från miljön*. Övriga värden från miljön (skola, program, mottagare)
+# sparas som vanligt — annars försvinner användarens ändring tyst när hen
+# trycker Spara i appen, och det är ett värre fel än det skyddet skulle lösa.
+HEMLIGA = (("token",), ("ai", "nyckel"), ("mejl", "losenord"))
+
+
+def _utan_hemliga(cfg):
+    """Kopia av cfg där hemligheter *som satts via miljön* är borttagna.
+
+    En token som appen själv har skapat måste däremot sparas — annars blir den
+    en ny varje gång servern startar och telefonens bokmärke slutar fungera.
+    """
+    rent = {k: (dict(v) if isinstance(v, dict) else v) for k, v in cfg.items()}
+    for vag in HEMLIGA:
+        topp = vag[0]
+        if topp not in FRAN_MILJO:
+            continue
+        if len(vag) == 1:
+            rent.pop(topp, None)
+            continue
+        # Bara den del som verkligen kom från miljön, inte hela gruppen.
+        if vag[1] not in (FRAN_MILJO.get(topp) or {}):
+            continue
+        under = rent.get(topp)
+        if isinstance(under, dict):
+            under.pop(vag[1], None)
+            if not under:
+                rent.pop(topp, None)
+    return rent
+
+
 def miljo_overstyrning():
     """Inställningar från miljövariabler.
 
@@ -54,7 +101,7 @@ def miljo_overstyrning():
     tomma och då gäller filen precis som förut.
 
     VVS_TOKEN, VVS_SKOLA, VVS_PROGRAM, VVS_ANSVARIG, VVS_DEADLINE,
-    VVS_MEJL_<ADRESS|NAMN|SMTP_SERVER|SMTP_PORT|LOSENORD>
+    VVS_MEJL_<ADRESS|NAMN|SMTP_SERVER|SMTP_PORT|LOSENORD>, VVS_AI_<NYCKEL|MODELL|URL|LEVERANTOR>
     """
     ut = {}
     for nyckel, namn in (("token", "VVS_TOKEN"), ("skola", "VVS_SKOLA"),
@@ -63,6 +110,14 @@ def miljo_overstyrning():
         v = os.environ.get(namn)
         if v:
             ut[nyckel] = v
+    ai = {}
+    for nyckel, namn in (("nyckel", "VVS_AI_NYCKEL"), ("modell", "VVS_AI_MODELL"),
+                         ("url", "VVS_AI_URL"), ("leverantor", "VVS_AI_LEVERANTOR")):
+        v = os.environ.get(namn)
+        if v:
+            ai[nyckel] = v
+    if ai:
+        ut["ai"] = ai
     mejl = {}
     for nyckel, namn in (("adress", "VVS_MEJL_ADRESS"), ("namn", "VVS_MEJL_NAMN"),
                          ("smtp_server", "VVS_MEJL_SMTP_SERVER"),
@@ -77,6 +132,10 @@ def miljo_overstyrning():
 
 
 def las_config():
+    # Miljövariablerna läses först, så att skriv_config längre ner vet vad som
+    # kom från miljön och alltså inte får sparas på disk.
+    global FRAN_MILJO
+    FRAN_MILJO = miljo_overstyrning()
     try:
         with open(CONFIG, encoding="utf-8") as fh:
             cfg = json.load(fh)
@@ -85,7 +144,7 @@ def las_config():
     if not isinstance(cfg, dict):
         cfg = {}
     ändrad = False
-    if not cfg.get("token"):
+    if not cfg.get("token") and not os.environ.get("VVS_TOKEN"):
         cfg["token"] = secrets.token_urlsafe(16)
         ändrad = True
     cfg.setdefault("port", PORT)
@@ -97,10 +156,10 @@ def las_config():
             ändrad = True
     if ändrad:
         skriv_config(cfg)
-    # Miljövariabler sist, så att de alltid gäller. Skrivs aldrig till filen.
-    for nyckel, v in miljo_overstyrning().items():
-        if nyckel == "mejl":
-            cfg["mejl"] = {**(cfg.get("mejl") or {}), **v}
+    # Miljövariablerna sist, så att de alltid gäller.
+    for nyckel, v in FRAN_MILJO.items():
+        if nyckel in ("mejl", "ai"):
+            cfg[nyckel] = {**(cfg.get(nyckel) or {}), **v}
         else:
             cfg[nyckel] = v
     return cfg
@@ -146,9 +205,19 @@ def ark_meta(cfg):
 
 
 def skriv_config(cfg):
+    """Skriver config.json — men aldrig token eller lösenord.
+
+    Allt annat sparas, även om det också finns i miljön. Miljövariabeln gäller
+    ändå när appen läser (se las_config), men filen får innehålla det
+    användaren själv skrev in.
+    """
+    rent = _utan_hemliga(cfg)
+    mapp = os.path.dirname(CONFIG)
+    if mapp:
+        os.makedirs(mapp, exist_ok=True)
     tmp = CONFIG + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(cfg, fh, ensure_ascii=False, indent=1)
+        json.dump(rent, fh, ensure_ascii=False, indent=1)
     os.replace(tmp, CONFIG)
     try:
         os.chmod(CONFIG, 0o600)
@@ -201,9 +270,15 @@ class Svar(BaseHTTPRequestHandler):
         except Exception:
             raise ValueError("ogiltig JSON")
 
+    def _lokal(self):
+        """Är anropet från själva datorn? Alltid nej om VVS_KRAV_TOKEN är satt."""
+        if KRAV_TOKEN_ALLA:
+            return False
+        return self.client_address[0] in LOKALA
+
     def _autentiserad(self):
         """Lokala anrop släpps igenom utan token, allt annat kräver rätt token."""
-        if self.client_address[0] in LOKALA:
+        if self._lokal():
             return True
         cfg = las_config()
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -299,7 +374,7 @@ class Svar(BaseHTTPRequestHandler):
         cfg = las_config()
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         given = (q.get("t") or [None])[0] or self.headers.get("X-Token") or ""
-        if not (self.client_address[0] in LOKALA
+        if not (self._lokal()
                 or secrets.compare_digest(str(given), str(cfg.get("token")))):
             self._fel(401, "ogiltig token")
             return
@@ -335,8 +410,13 @@ class Svar(BaseHTTPRequestHandler):
         namn = time.strftime("inventering-%Y-%m-%d")
         meta = ark_meta(las_config())
         if fmt == "csv":
+            try:
+                data = kalkyl.csv_bytes(poster, meta)
+            except Exception as exc:                            # noqa: BLE001
+                self._fel(500, f"kunde inte bygga kalkylarket: {exc}")
+                return
             self._logg("export", "csv")
-            self._send(200, kalkyl.csv_bytes(poster, meta), "text/csv; charset=utf-8",
+            self._send(200, data, "text/csv; charset=utf-8",
                        {"Content-Disposition": f'attachment; filename="{namn}.csv"'})
             return
         try:
@@ -494,14 +574,20 @@ class Svar(BaseHTTPRequestHandler):
 
 
 def main():
-    os.makedirs(BILDER, exist_ok=True)
-    os.makedirs(EXPORT, exist_ok=True)
+    stigar.se_till_att_mappar_finns()
     cfg = las_config()
     modell = ai.valj_modell(cfg)
+    moln = bool(os.environ.get("RENDER") or os.environ.get("VVS_KRAV_TOKEN"))
     print("SYS.VVS — inventering av VVS-verkstaden")
     print(f"  här    : {HERE}")
-    print(f"  datorn : http://127.0.0.1:{PORT}")
-    print(f"  mobil  : http://{lan_ip()}:{PORT}/?t={cfg['token']}")
+    print(f"  data   : {DATA}")
+    print(f"  lyssnar: 0.0.0.0:{PORT}")
+    if moln:
+        # Inte token i klartext i serverloggen — loggen kan läsas av fler.
+        print(f"  läge   : moln (token krävs, längd {len(cfg.get('token') or '')})")
+    else:
+        print(f"  datorn : http://127.0.0.1:{PORT}")
+        print(f"  mobil  : http://{lan_ip()}:{PORT}/?t={cfg['token']}")
     print(f"  bild-AI: {modell or 'ingen bildmodell — hämta med: ollama pull ' + ai.STANDARD_MODELL}")
     print(f"  poster : {len(lager.las()['poster'])} i inventeringen")
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Svar)

@@ -1,0 +1,11 @@
+# SYS.VVS körs med enbart Pythons standardbibliotek — ingenting behöver
+# installeras för att appen ska starta. Raderna nedan är frivilliga
+# förbättringar; ta bort dem om du vill ha en helt tom installation.
+#
+# Alla tre är redan tillval i koden: saknas de fungerar appen ändå.
+
+# Ritar skrivbordsikonen (installera.sh -> ikon.py)
+Pillow>=10 ; sys_platform == "linux"
+
+# QR-koden i terminalen (vvsinv --qr). Saknas den visas adressen som text.
+qrcode>=7 ; sys_platform == "linux"

@@ -1,84 +1,48 @@
-# Att köra SYS.VVS på en server (Render m.fl.)
+# Molnet — vad som gäller och varför
 
-Det här är en **plan**, inte något som är byggt. Appen som finns i dag är
-gjord för att köra på din dator. Den här filen beskriver vad som måste
-ändras om den ska kunna köra utan att datorn är påslagen.
+**Guiden du följer ligger i `DEPLOY.md`.** Den här filen förklarar bara
+bakgrunden, så att du kan bedöma om molnet är rätt val för dig.
 
 ## Varför Netlify inte går
 
-Netlify publicerar **färdiga filer**. Den kör inget program. Den här appen är
+Netlify publicerar **färdiga filer**. Det kör inget program. Den här appen är
 ett Python-program som sparar filer, skickar e-post och analyserar bilder.
-Netlify kan visa en sida — inte vara servern. Det finns inget att bygga, och
-därför kommer dess byggsteg att misslyckas hur repot än ser ut.
+Netlify kan visa en sida — inte vara servern. Därför finns inget att bygga
+och byggsteget kommer att misslyckas hur repot än ser ut.
 
-## Vad Render klarar
+## Vad som byggdes för att Render skulle gå
 
-Render kan köra Python-program, och ger HTTPS automatiskt. Men fyra saker
-måste lösas, och ingen av dem är gratis på riktigt.
-
-### 1. Lagringen
-
-Render har ingen egen hårddisk som överlever en omstart på gratisen.
-Inventeringen ligger i en fil — startar tjänsten om, är allt borta.
-
-* **Beständig disk** hos Render: kräver en betald instans.
-* **Databas** i stället: Render har en som är gratis en begränsad tid,
-  Supabase och Neon har gratisnivåer som varar. Då måste `lager.py` skrivas
-  om från fil till databas — det är det största jobbet.
-* Fotona behöver samma sak. Bilder i en databas är dumt; de hör i
-  objektlagring (Cloudflare R2, Supabase Storage).
-
-### 2. Bildanalysen
-
-Ollama kan inte köras på Render. Modellen är 3 GB, Render har ingen GPU, och
-en sådan instans kostar mer än hela projektet är värt.
-
-Alltså måste analysen gå till ett **molntjänst-API** i stället:
-
-* Bilden lämnar skolan och skickas till Google, Anthropic eller OpenAI.
-  Det är en annan sak än i dag, då ingenting lämnar datorn — värt att tänka
-  igenom innan man fotar lokaler och utrustning.
-* Det behövs en API-nyckel, och oftast ett betalkort.
-
-### 3. E-posten
-
-Många webbhotell stänger utgående e-postportar för att stoppa spam. Att
-skicka via Gmail från Render fungerar därför inte säkert. Då får utskicket gå
-via en e-posttjänst (Resend, Brevo) — eller så hoppar man över mejlknappen
-och laddar ner arket i stället.
-
-### 4. Inloggningen
-
-Adressen blir publik. I dag skyddas allt av en token i länken — den som har
-länken kommer in. På internet räcker inte det. Det behövs ett riktigt
-lösenord, och token får bli en sessionsnyckel.
-
-## Vad som redan är klart
-
-`server.py` läser nu inställningar och hemligheter ur miljövariabler om de
-finns, så att inget lösenord behöver ligga i en fil på en främmande server:
-
-    VVS_TOKEN, VVS_SKOLA, VVS_PROGRAM, VVS_ANSVARIG, VVS_DEADLINE
-    VVS_MEJL_ADRESS, VVS_MEJL_NAMN, VVS_MEJL_SMTP_SERVER,
-    VVS_MEJL_SMTP_PORT, VVS_MEJL_LOSENORD
-
-## Vad jobbet består av
-
-| Del | Omfattning |
+| Del | Lösning |
 |---|---|
-| Lagring till databas i stället för fil | `lager.py` skrivs om, `server.py` följer med |
-| Bilder till objektlagring | ny fil, `server.py` och `index.html` anropar den |
-| Bildanalys mot moln-API | `ai.py` skrivs om; samma gränssnitt mot resten |
-| Riktig inloggning | nytt i `server.py` och `index.html` |
-| Deployment-filer | `requirements.txt`, `render.yaml`, startkommando |
-| Provkörning | samma tester som i dag, mot molnet |
+| Lagringen | `stigar.py` + `VVS_DATA` låter data och `config.json` ligga på en monterad disk i stället för i kodmappen |
+| Bildanalysen | `ai.py` kan skicka fotot till Google Gemini eller OpenAI när ingen lokal modell finns |
+| Hemligheter | Alla nycklar och lösenord kan komma från miljövariabler och skrivs då aldrig till disk |
+| Inloggningen | `VVS_KRAV_TOKEN=1` kräver token även från 127.0.0.1 — nödvändigt bakom en proxy |
+| Deployment | `render.yaml`, `Procfile`, `requirements.txt`, `.env.example` |
 
-Det är ungefär en lika stor insats som appen var att bygga. Gör det bara om
-datorn verkligen inte kan vara på — tunnel-alternativet kostar ingenting och
-behåller både Ollama och hemligheterna hemma.
+## Det du bör veta innan du sätter igång
+
+**Bilderna lämnar skolan.** Lokalt analyseras fotona av Ollama och stannar på
+datorn. I molnet måste de skickas till Google eller OpenAI. Det är en
+verklig skillnad. Appen är byggd för att bara fotografera utrustning och
+VVS-artiklar, aldrig människor eller lokaler i allmänhet — men det är ditt
+ansvar att se till att det blir så i praktiken.
+
+**Det kostar pengar.** En Render-instans som kan ha en monterad disk är
+en betald instans (några tiotals kronor i månaden). Gratisnivån kan inte
+behålla data mellan omstarter, och då spelar det ingen roll hur bra koden är.
+
+**Token i adressen.** Skyddet är en hemlig token i länken. Den som har
+länken kommer in. Det är tillräckligt för en inventering inom skolan, men
+det är inte ett riktigt konto med lösenord och utloggning. Vill du ha det
+behövs mer arbete.
 
 ## Alternativet: tunneln
 
 Datorn är servern, och telefonen når den utifrån via Tailscale. Ingen kod
-ändras, ingen kostnad, inga bilder lämnar datorn. Enda villkoret: datorn
-måste vara på.
+ändras, ingenting kostar, och **inga bilder lämnar datorn**. Enda villkoret
+är att datorn är påslagen — alltså exakt samma sak som i dag, men telefonen
+fungerar även utanför skolans nätverk.
+
+Är datorn oftast på är det här enklare och bättre än molnet. Är den oftast av
+är molnet rätt väg.

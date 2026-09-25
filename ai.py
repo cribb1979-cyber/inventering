@@ -1,10 +1,16 @@
 """Bildanalys av VVS-utrustning.
 
-En bild skickas till en lokal bildmodell i Ollama (inga bilder lämnar datorn).
+Två sätt att analysera en bild:
+
+* **Ollama lokalt** (standard på datorn). Ingenting lämnar maskinen.
+* **En molntjänst** (Gemini eller ett OpenAI-kompatibelt API). Behövs när
+  appen kör på en server, för där finns ingen Ollama. Då skickas bilden till
+  tjänsten — det ska man veta om, och därför är det ett aktivt val.
+
 Modellen får svara med JSON och resultatet blir ett *förslag* — ingenting
 sparas förrän användaren trycker Spara.
 
-Modellen är valfri: saknas den fungerar appen ändå, då får man fylla i
+Analysen är valfri: saknas den fungerar appen ändå, då får man fylla i
 fälten själv och bilden sparas som vanligt.
 """
 import base64
@@ -13,10 +19,18 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 
 OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 STANDARD_MODELL = "qwen2.5vl:3b"
+
+# Molnleverantörer. "openai" betyder vilket API som helst som talar samma
+# språk (OpenAI, Mistral, Groq, en lokal server …) — bara adressen ändras.
+STANDARD_MODELLER = {"gemini": "gemini-2.0-flash",
+                     "openai": "gpt-4o-mini"}
+STANDARD_URLAR = {"gemini": "https://generativelanguage.googleapis.com/v1beta",
+                  "openai": "https://api.openai.com/v1"}
 
 # Modeller som kan se bilder. Används för att varna i förväg i stället för
 # att låta användaren vänta på ett anrop som ändå inte kan svara.
@@ -204,27 +218,19 @@ def _dubbletter(sparade):
     return list(ut.values())
 
 
-def analysera(sokvag, cfg=None, timeout=180):
-    """Analyserar en bild och returnerar ett eller flera förslag.
+def moln_redo(cfg=None):
+    """Är en molntjänst inställd? Returnerar (leverantör, nyckel) eller None."""
+    ai_cfg = (cfg or {}).get("ai") or {}
+    leverantor = (os.environ.get("VVS_AI_LEVERANTOR")
+                  or ai_cfg.get("leverantor") or "").strip().lower()
+    nyckel = (os.environ.get("VVS_AI_NYCKEL") or ai_cfg.get("nyckel") or "").strip()
+    if leverantor in STANDARD_MODELLER and nyckel:
+        return leverantor, nyckel
+    return None
 
-    Returnerar alltid ett diktat: antingen
-    {"forslag": [ {...}, ... ], "modell": ...} eller {"fel": "..."} med en
-    förklaring som går att visa för användaren.
-    """
-    modell = valj_modell(cfg)
-    if not modell:
-        har = tillgangliga()
-        if not har:
-            return {"fel": "Ollama svarar inte. Starta tjänsten med: "
-                           "sudo systemctl start ollama"}
-        return {"fel": "Ingen bildmodell finns lokalt. Hämta en med: "
-                       "ollama pull " + STANDARD_MODELL,
-                "modeller": har}
-    try:
-        bild = _bild_base64(sokvag)
-    except Exception as exc:
-        return {"fel": f"Kunde inte läsa bilden: {exc}"}
 
+def _fraga_ollama(bild, modell, timeout):
+    """Frågar den lokala Ollama. Returnerar (text, None) eller (None, fel)."""
     kropp = {"model": modell, "stream": False, "format": "json",
              "options": {"temperature": 0.1, "num_predict": 1500},
              # Håll modellen i minnet. Första anropet tar ~80 s (den laddas då),
@@ -232,20 +238,119 @@ def analysera(sokvag, cfg=None, timeout=180):
              # och telefonen får vänta varje gång.
              "keep_alive": "30m",
              "messages": [{"role": "user", "content": SYSTEM, "images": [bild]}]}
-    req = urllib.request.Request(OLLAMA + "/api/chat",
-                                 data=json.dumps(kropp).encode("utf-8"),
+    text, fel = _post_json(OLLAMA + "/api/chat", kropp, timeout)
+    if fel:
+        return None, {"fel": f"Kunde inte nå modellen: {fel}"}
+    return ((text.get("message") or {}).get("content") or "").strip(), None
+
+
+def _fraga_gemini(bild, modell, nyckel, bas_url, timeout):
+    """Googles generateContent. Bilden skickas som inline_data."""
+    # Nyckeln skickas som header, inte i adressen. I adressen hamnar den i
+    # loggar och proxyservrar på vägen — det vill man inte med en API-nyckel.
+    url = f"{bas_url}/models/{urllib.parse.quote(modell)}:generateContent"
+    kropp = {
+        "system_instruction": {"parts": [{"text": SYSTEM}]},
+        "contents": [{"role": "user", "parts": [
+            {"text": "Inventera det som syns på bilden."},
+            {"inline_data": {"mime_type": "image/jpeg", "data": bild}}]}],
+        "generationConfig": {"temperature": 0.1,
+                             "response_mime_type": "application/json"},
+    }
+    svar, fel = _post_json(url, kropp, timeout,
+                           huvud={"x-goog-api-key": nyckel})
+    if fel:
+        return None, {"fel": f"Kunde inte nå molntjänsten: {fel}"}
+    delar = (((svar.get("candidates") or [{}])[0].get("content") or {})
+             .get("parts") or [])
+    text = "".join(d.get("text", "") for d in delar).strip()
+    if not text:
+        blockat = (svar.get("promptFeedback") or {}).get("blockReason")
+        return None, {"fel": f"Molntjänsten svarade inget"
+                             f"{f' ({blockat})' if blockat else ''}."}
+    return text, None
+
+
+def _fraga_openai(bild, modell, nyckel, bas_url, timeout):
+    """OpenAI-formatet. Fungerar även mot Mistral, Groq och lokala servrar —
+    det är samma API, bara adressen skiljer."""
+    kropp = {
+        "model": modell,
+        "temperature": 0.1,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": [
+                {"type": "text", "text": "Inventera det som syns på bilden."},
+                {"type": "image_url",
+                 "image_url": {"url": "data:image/jpeg;base64," + bild}}]}],
+    }
+    svar, fel = _post_json(bas_url + "/chat/completions", kropp, timeout,
+                           huvud={"Authorization": f"Bearer {nyckel}"})
+    if fel:
+        return None, {"fel": f"Kunde inte nå molntjänsten: {fel}"}
+    val = (svar.get("choices") or [{}])[0].get("message") or {}
+    return (val.get("content") or "").strip(), None
+
+
+def _post_json(url, kropp, timeout, huvud=None):
+    """POST med JSON. Returnerar (svar, None) eller (None, feltext)."""
+    req = urllib.request.Request(url, data=json.dumps(kropp).encode("utf-8"),
                                  method="POST")
     req.add_header("content-type", "application/json")
+    for nyckel, v in (huvud or {}).items():
+        req.add_header(nyckel, v)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            svar = json.loads(resp.read().decode("utf-8", "replace"))
+            return json.loads(resp.read().decode("utf-8", "replace")), None
     except urllib.error.HTTPError as exc:
         rå = exc.read().decode("utf-8", "replace")[:300]
-        return {"fel": f"Modellen svarade fel ({exc.code}): {rå}"}
-    except Exception as exc:
-        return {"fel": f"Kunde inte nå modellen: {type(exc).__name__}: {exc}"}
+        return None, f"tjänsten svarade {exc.code}: {rå}"
+    except Exception as exc:                                   # noqa: BLE001
+        return None, f"{type(exc).__name__}: {exc}"
 
-    text = ((svar.get("message") or {}).get("content") or "").strip()
+
+def analysera(sokvag, cfg=None, timeout=180):
+    """Analyserar en bild och returnerar ett eller flera förslag.
+
+    Använder molntjänsten om en sådan är inställd, annars Ollama lokalt.
+    Returnerar alltid ett diktat: antingen
+    {"forslag": [ {...}, ... ], "modell": ...} eller {"fel": "..."} med en
+    förklaring som går att visa för användaren.
+    """
+    ai_cfg = (cfg or {}).get("ai") or {}
+    moln = moln_redo(cfg)
+    if moln:
+        leverantor, nyckel = moln
+        modell = (os.environ.get("VVS_AI_MODELL") or ai_cfg.get("modell")
+                  or STANDARD_MODELLER[leverantor])
+        bas_url = ((os.environ.get("VVS_AI_URL") or ai_cfg.get("url")
+                    or STANDARD_URLAR[leverantor]).rstrip("/"))
+    else:
+        modell = valj_modell(cfg)
+        if not modell:
+            har = tillgangliga()
+            if not har:
+                return {"fel": "Ollama svarar inte. Starta tjänsten med: "
+                               "sudo systemctl start ollama"}
+            return {"fel": "Ingen bildmodell finns lokalt. Hämta en med: "
+                           "ollama pull " + STANDARD_MODELL,
+                    "modeller": har}
+    try:
+        bild = _bild_base64(sokvag)
+    except Exception as exc:
+        return {"fel": f"Kunde inte läsa bilden: {exc}"}
+
+    if moln:
+        if leverantor == "gemini":
+            text, fel = _fraga_gemini(bild, modell, nyckel, bas_url, timeout)
+        else:
+            text, fel = _fraga_openai(bild, modell, nyckel, bas_url, timeout)
+    else:
+        text, fel = _fraga_ollama(bild, modell, timeout)
+    if fel:
+        return fel
+
     data = _plocka_json(text)
 
     # Modellen kan svara med en lista, med {"foremal": [...]} eller — om den
@@ -287,7 +392,11 @@ def varm(cfg=None, timeout=240):
     minnet. Gör vi det när servern startar slipper den som fotar med telefonen
     sitta och vänta på det. Misslyckas det är det ingen fara — då laddas
     modellen vid första bilden i stället.
+
+    Används en molntjänst behövs ingen förvärmning.
     """
+    if moln_redo(cfg):
+        return True
     modell = valj_modell(cfg)
     if not modell:
         return False

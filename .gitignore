@@ -1,7 +1,11 @@
 # Hemligheter och lokal data — ska aldrig till GitHub
 config.json
+.env
+.env.*
+!.env.example
 data/
 .prov-*/
 __pycache__/
 *.pyc
 *.log
+*.trasig-*
