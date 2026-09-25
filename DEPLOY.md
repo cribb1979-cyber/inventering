@@ -77,6 +77,13 @@ därför appen bara fotar utrustning och VVS-artiklar, aldrig människor.
 
 Gratisnivån räcker gott: några hundra foton per dag utan kostnad.
 
+Modellnamnet behöver du inte fylla i. Appen använder Googles alias
+`gemini-flash-latest`, som alltid pekar på den nyaste snabba modellen. Om
+Google någon gång pensionerar ett namn svarar den gamla adressen 404 — då
+frågar appen tjänsten vilka modeller nyckeln får använda och väljer den
+nyaste Flash, och fortsätter. Du behöver alltså inte ändra något i Render
+den dagen.
+
 Vill du hellre använda OpenAI i stället: skaffa en nyckel på
 platform.openai.com och sätt `VVS_AI_LEVERANTOR=openai`.
 
@@ -165,7 +172,9 @@ monterad — då är `VVS_DATA` fel inställd.
 | QR-koden syns inte | sidan är inte upplåst, eller servern kan inte rita koder | kolla att rutan **Koppla ihop appen** är borta; `curl -I <adress>` visar rubriken `X-SYSVVS-QR: ja` |
 | Allt försvinner vid omstart | disken är inte monterad | kontrollera att `VVS_DATA=/var/data` och att disken står under **Disks** med samma sökväg |
 | Bildanalysen svarar "ingen bildmodell" | nyckeln saknas eller är fel | kontrollera `VVS_AI_NYCKEL` under Environment |
+| "Modellen … finns inte längre" | modellnamnet har pensionerats | inget att göra — appen byter namn själv och skriver vilket den valde |
 | Analysen svarar 400/403 | nyckeln avvisas | skapa en ny nyckel på aistudio.google.com |
+| Vill du se vilken modell som används | — | öppna `https://<din adress>/api/ai-koll?t=<VVS_TOKEN>` i telefonen |
 | Sidan är långsam första gången | gratistjänsten "somnar" | normal första gångs last. Uppgradera planen om det stör |
 | Bygget misslyckas | fel i koden | läs loggen i Render → **Logs** |
 

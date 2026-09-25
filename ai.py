@@ -14,10 +14,12 @@ Analysen är valfri: saknas den fungerar appen ändå, då får man fylla i
 fälten själv och bilden sparas som vanligt.
 """
 import base64
+import hashlib
 import io
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,10 +29,27 @@ STANDARD_MODELL = "qwen2.5vl:3b"
 
 # Molnleverantörer. "openai" betyder vilket API som helst som talar samma
 # språk (OpenAI, Mistral, Groq, en lokal server …) — bara adressen ändras.
-STANDARD_MODELLER = {"gemini": "gemini-2.0-flash",
+#
+# Gemini: i stället för ett fast namn används Googles eget alias, som alltid
+# pekar på den nyaste snabba modellen. Namnen byts ut med jämna mellanrum och
+# ett namn som slutat gälla svarar 404 — då frågar vi tjänsten vilka namn som
+# finns och väljer den nyaste Flash (se _valj_ur_tjansten).
+STANDARD_MODELLER = {"gemini": "gemini-flash-latest",
                      "openai": "gpt-4o-mini"}
 STANDARD_URLAR = {"gemini": "https://generativelanguage.googleapis.com/v1beta",
                   "openai": "https://api.openai.com/v1"}
+
+# Namn vi hoppar över när vi letar bildmodell: de kan inte se bilder, eller
+# gör något helt annat än att svara på en bild.
+INTE_BILDMODELL = ("tts", "image", "embedding", "aqa", "live", "audio",
+                   "robotics", "computer-use", "learnlm", "gemma", "veo",
+                   "imagen", "embed")
+
+# Modellnamnen sparas en stund. Att fråga tjänsten varje gång en bild kommer
+# vore slöseri; en gång i timmen räcker gott.
+MOLN_CACHE_SEK = 3600
+_MOLN_CACHE = {}          # fingeravtryck -> {"tid": ..., "lista": [...], "fel": ...}
+_VALD = {}                # leverantör -> modellnamnet som faktiskt svarade
 
 # Modeller som kan se bilder. Används för att varna i förväg i stället för
 # att låta användaren vänta på ett anrop som ändå inte kan svara.
@@ -229,6 +248,156 @@ def moln_redo(cfg=None):
     return None
 
 
+def moln_inst(cfg=None):
+    """Allt som behövs för att fråga molnet: leverantör, nyckel, modell, adress.
+
+    Miljövariablerna går före inställningarna i config.json, så att Render kan
+    styra utan att filen skrivs om."""
+    m = moln_redo(cfg)
+    if not m:
+        return None
+    leverantor, nyckel = m
+    ai_cfg = (cfg or {}).get("ai") or {}
+    modell = (os.environ.get("VVS_AI_MODELL") or ai_cfg.get("modell")
+              or STANDARD_MODELLER[leverantor]).strip()
+    bas = ((os.environ.get("VVS_AI_URL") or ai_cfg.get("url")
+            or STANDARD_URLAR[leverantor]).rstrip("/"))
+    return {"leverantor": leverantor, "nyckel": nyckel,
+            "modell": modell or STANDARD_MODELLER[leverantor], "url": bas}
+
+
+def molnmodell(cfg=None):
+    """Modellnamnet som används just nu. Ingen nätkontakt — det som står i
+    inställningarna, eller det namn vi nyss lyckades med."""
+    inst = moln_inst(cfg)
+    if not inst:
+        return ""
+    return _VALD.get(inst["leverantor"]) or inst["modell"]
+
+
+def _finger(inst):
+    """Ett kort märke för nyckeln, så att cachen släpps om den byts.
+
+    Nyckeln själv lagras aldrig — bara ett fingeravtryck av den."""
+    nyckel = inst["nyckel"].encode("utf-8")
+    return inst["leverantor"] + ":" + hashlib.sha256(nyckel).hexdigest()[:10]
+
+
+def _get_json(url, timeout, huvud=None):
+    """GET med JSON-svar. Returnerar (svar, None) eller (None, feltext)."""
+    req = urllib.request.Request(url, method="GET")
+    for nyckel, v in (huvud or {}).items():
+        req.add_header(nyckel, v)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace")), None
+    except urllib.error.HTTPError as exc:
+        rå = exc.read().decode("utf-8", "replace")[:300]
+        return None, f"{exc.code}: {rå}"
+    except Exception as exc:                                   # noqa: BLE001
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def _ar_dod_modell(fel):
+    """Betyder felet att modellnamnet inte längre gäller?"""
+    t = (fel or "").lower()
+    return "404" in t or "not found" in t or "not supported" in t
+
+
+def _molntext(fel):
+    """Felraden som visas i telefonen. Den ska säga vad som är fel, inte bara
+    att något är fel — annars står man där med en inventering som inte går."""
+    m = re.match(r"^(\d{3}):\s*(.*)$", fel or "", re.S)
+    if not m:
+        return "Kunde inte nå molntjänsten: " + (fel or "okänt fel")
+    kod, text = int(m.group(1)), m.group(2).strip()
+    förklaring = {
+        400: "Molntjänsten svarade 400 (anropet var fel)",
+        401: "Molntjänsten svarade 401 (nyckeln godkänns inte)",
+        403: ("Molntjänsten svarade 403 (nyckeln får inte använda modellen, "
+              "eller så är API:et inte påslaget i Googles projekt)"),
+        404: "Molntjänsten svarade 404 (modellen finns inte längre)",
+        429: "Molntjänsten svarade 429 (kvoten är slut för stunden)",
+    }.get(kod)
+    return (förklaring + ": " + text) if förklaring else f"Molntjänsten svarade {kod}: {text}"
+
+
+def lista_modeller(inst, timeout=20):
+    """Vilka modeller nyckeln får använda, enligt tjänsten själv.
+
+    Returnerar (namn, None) eller ([], feltext). Enda sättet att veta vad
+    modellerna heter i dag — gissar vi blir det 404."""
+    if inst["leverantor"] == "gemini":
+        kropp, fel = _get_json(inst["url"] + "/models?pageSize=200", timeout,
+                               {"x-goog-api-key": inst["nyckel"]})
+        if fel:
+            return [], _molntext(fel)
+        ut = []
+        for m in kropp.get("models") or []:
+            namn = str(m.get("name") or "").split("/")[-1]
+            metod = m.get("supportedGenerationMethods") or []
+            if namn and (not metod or "generateContent" in metod):
+                ut.append(namn)
+        return ut, None
+    kropp, fel = _get_json(inst["url"] + "/models", timeout,
+                           {"Authorization": "Bearer " + inst["nyckel"]})
+    if fel:
+        return [], _molntext(fel)
+    return [str(m.get("id")) for m in (kropp.get("data") or []) if m.get("id")], None
+
+
+def _cachad_modeller(inst, timeout=20):
+    """Som lista_modeller, men svaret sparas en stund."""
+    nyckel = _finger(inst)
+    sparad = _MOLN_CACHE.get(nyckel)
+    if sparad and time.time() - sparad["tid"] < MOLN_CACHE_SEK:
+        return sparad["lista"], sparad["fel"]
+    lista, fel = lista_modeller(inst, timeout)
+    _MOLN_CACHE[nyckel] = {"tid": time.time(), "lista": lista, "fel": fel}
+    return lista, fel
+
+
+def _alder(namn):
+    """Versionssiffran i namnet, så att den nyaste kan gå först."""
+    m = re.match(r"^gemini-(\d+(?:\.\d+)?)", namn or "")
+    return float(m.group(1)) if m else 0.0
+
+
+def valj_bildmodell(namn, leverantor="gemini"):
+    """Vilken av tjänstens modeller vi ska använda.
+
+    Nyaste Flash: snabb, billig och kan se bilder. Googles alias
+    "gemini-flash-latest" får gå före allt annat, för det flyttar sig själv
+    när Google byter namn — då behöver ingenting ändras här."""
+    if not namn:
+        return ""
+    if leverantor != "gemini":
+        return ""                    # OpenAI-formatet: rör inte valet
+    kvar = [n for n in namn
+            if not any(b in n.lower() for b in INTE_BILDMODELL)]
+    flash = [n for n in kvar if "flash" in n.lower()]
+    if not flash:                    # ingen Flash alls: ta den nyaste andra
+        return max(kvar, key=_alder) if kvar else ""
+
+    def rang(n):
+        l = n.lower()
+        return (l == STANDARD_MODELLER["gemini"],      # aliaset först
+                _alder(n),                             # sedan nyaste version
+                0 if "lite" not in l else -1,           # hellre full än lite
+                0 if "preview" not in l and "exp" not in l else -1)
+
+    return max(flash, key=rang)
+
+
+def _med_lista(inst, fel, modell):
+    """Felraden, med namnen som faktiskt går att använda."""
+    lista, _ = _cachad_modeller(inst)
+    if not lista:
+        return fel
+    return (fel + ". Modellen " + modell + " går inte att använda. Går bra: "
+            + ", ".join(lista[:12]))
+
+
 def _fraga_ollama(bild, modell, timeout):
     """Frågar den lokala Ollama. Returnerar (text, None) eller (None, fel)."""
     kropp = {"model": modell, "stream": False, "format": "json",
@@ -242,7 +411,6 @@ def _fraga_ollama(bild, modell, timeout):
     if fel:
         return None, {"fel": f"Kunde inte nå modellen: {fel}"}
     return ((text.get("message") or {}).get("content") or "").strip(), None
-
 
 def _fraga_gemini(bild, modell, nyckel, bas_url, timeout):
     """Googles generateContent. Bilden skickas som inline_data."""
@@ -260,7 +428,7 @@ def _fraga_gemini(bild, modell, nyckel, bas_url, timeout):
     svar, fel = _post_json(url, kropp, timeout,
                            huvud={"x-goog-api-key": nyckel})
     if fel:
-        return None, {"fel": f"Kunde inte nå molntjänsten: {fel}"}
+        return None, {"fel": _molntext(fel)}
     delar = (((svar.get("candidates") or [{}])[0].get("content") or {})
              .get("parts") or [])
     text = "".join(d.get("text", "") for d in delar).strip()
@@ -288,7 +456,7 @@ def _fraga_openai(bild, modell, nyckel, bas_url, timeout):
     svar, fel = _post_json(bas_url + "/chat/completions", kropp, timeout,
                            huvud={"Authorization": f"Bearer {nyckel}"})
     if fel:
-        return None, {"fel": f"Kunde inte nå molntjänsten: {fel}"}
+        return None, {"fel": _molntext(fel)}
     val = (svar.get("choices") or [{}])[0].get("message") or {}
     return (val.get("content") or "").strip(), None
 
@@ -305,9 +473,66 @@ def _post_json(url, kropp, timeout, huvud=None):
             return json.loads(resp.read().decode("utf-8", "replace")), None
     except urllib.error.HTTPError as exc:
         rå = exc.read().decode("utf-8", "replace")[:300]
-        return None, f"tjänsten svarade {exc.code}: {rå}"
+        return None, f"{exc.code}: {rå}"
     except Exception as exc:                                   # noqa: BLE001
         return None, f"{type(exc).__name__}: {exc}"
+
+
+def _skicka(bild, leverantor, modell, nyckel, bas_url, timeout):
+    """Ett anrop till molntjänsten, oavsett leverantör.
+
+    Returnerar (text, None) eller (None, felrad). Felraden är en vanlig
+    sträng här, så att den som frågar slipper gräva i ett diktat."""
+    if leverantor == "gemini":
+        text, fel = _fraga_gemini(bild, modell, nyckel, bas_url, timeout)
+    else:
+        text, fel = _fraga_openai(bild, modell, nyckel, bas_url, timeout)
+    if fel:
+        return None, (fel or {}).get("fel") or "molntjänsten svarade inget"
+    return text, None
+
+
+def _fraga_moln(bild, inst, timeout):
+    """Frågar molntjänsten och lagar ett dött modellnamn på vägen.
+
+    Google pensionerar modellnamn med jämna mellanrum, och då svarar den
+    gamla adressen 404. I stället för att telefonen ska stå still tills
+    någon ändrar i Render frågar vi tjänsten vilka namn som gäller nu och
+    gör ett försök till. Namnet som fungerade kommer ihåg.
+
+    Returnerar (text, None, modell) eller (None, {"fel": ...}, modell)."""
+    lev, nyckel, bas = inst["leverantor"], inst["nyckel"], inst["url"]
+
+    # Prova i tur och ordning: namnet som fungerade senast, sedan det som
+    # står i inställningarna. Vanligtvis räcker det första.
+    prov = []
+    for m in (_VALD.get(lev), inst["modell"]):
+        if m and m not in prov:
+            prov.append(m)
+
+    fel, modell = "molntjänsten svarade inget", prov[-1]
+    for modell in prov:
+        text, fel = _skicka(bild, lev, modell, nyckel, bas, timeout)
+        if not fel:
+            _VALD[lev] = modell
+            return text, None, modell
+        if not _ar_dod_modell(fel):      # annat fel — att byta namn hjälper inte
+            return None, {"fel": fel, "modell": modell}, modell
+
+    # Alla namn vi känner svarar 404. Fråga tjänsten vad som gäller i dag.
+    lista, lfel = _cachad_modeller(inst)
+    ny = valj_bildmodell(lista, lev) if lista else ""
+    if not ny or ny in prov:
+        if lfel:
+            fel = fel + " (" + lfel + ")"
+        elif modell not in lista:
+            fel = _med_lista(inst, fel, modell)
+        return None, {"fel": fel, "modell": modell}, modell
+    text, fel2 = _skicka(bild, lev, ny, nyckel, bas, timeout)
+    if not fel2:
+        _VALD[lev] = ny
+        return text, None, ny
+    return None, {"fel": _med_lista(inst, fel2, ny), "modell": ny}, ny
 
 
 def analysera(sokvag, cfg=None, timeout=180):
@@ -318,15 +543,8 @@ def analysera(sokvag, cfg=None, timeout=180):
     {"forslag": [ {...}, ... ], "modell": ...} eller {"fel": "..."} med en
     förklaring som går att visa för användaren.
     """
-    ai_cfg = (cfg or {}).get("ai") or {}
-    moln = moln_redo(cfg)
-    if moln:
-        leverantor, nyckel = moln
-        modell = (os.environ.get("VVS_AI_MODELL") or ai_cfg.get("modell")
-                  or STANDARD_MODELLER[leverantor])
-        bas_url = ((os.environ.get("VVS_AI_URL") or ai_cfg.get("url")
-                    or STANDARD_URLAR[leverantor]).rstrip("/"))
-    else:
+    inst = moln_inst(cfg)
+    if not inst:
         modell = valj_modell(cfg)
         if not modell:
             har = tillgangliga()
@@ -341,11 +559,8 @@ def analysera(sokvag, cfg=None, timeout=180):
     except Exception as exc:
         return {"fel": f"Kunde inte läsa bilden: {exc}"}
 
-    if moln:
-        if leverantor == "gemini":
-            text, fel = _fraga_gemini(bild, modell, nyckel, bas_url, timeout)
-        else:
-            text, fel = _fraga_openai(bild, modell, nyckel, bas_url, timeout)
+    if inst:
+        text, fel, modell = _fraga_moln(bild, inst, timeout)
     else:
         text, fel = _fraga_ollama(bild, modell, timeout)
     if fel:

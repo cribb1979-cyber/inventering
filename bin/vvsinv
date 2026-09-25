@@ -13,6 +13,10 @@
 
 set -u
 
+# Loggen och de sparade filerna kan innehålla telefonlänken, och länken är
+# nyckeln. Därför skapas de så att bara du själv kan läsa dem (600/700).
+umask 077
+
 PORT="${VVS_PORT:-8792}"
 PROFIL="${VVS_PROFIL:-$HOME/.mozilla/firefox/sysvvs.inv}"
 TITEL="SYS.VVS ‖ inventering"

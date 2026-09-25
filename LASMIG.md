@@ -150,7 +150,9 @@ Hämta modellen med:
     ollama pull qwen2.5vl:3b
 
 Kör appen i molnet finns ingen lokal modell. Då används en molntjänst i
-stället och fotona skickas dit — se `DEPLOY.md` och `MOLN.md`.
+stället och fotona skickas dit — se `DEPLOY.md` och `MOLN.md`. Modellen där
+väljs automatiskt (nyaste Gemini Flash). Undrar du vilken som används, eller
+om nyckeln fungerar, öppna `/api/ai-koll?t=<din token>` i telefonen.
 
 ## Inställningar
 

@@ -398,9 +398,10 @@ class Svar(BaseHTTPRequestHandler):
                                  "mobil": self._bas_url(),
                                  "lokal": f"http://127.0.0.1:{PORT}",
                                  "token": cfg["token"],
-                                 "bildmodell": ai.valj_modell(cfg),
+                                 "bildmodell": ai.valj_modell(cfg) or ai.molnmodell(cfg),
                                  "standard_modell": ai.STANDARD_MODELL,
                                  "modeller": ai.tillgangliga(),
+                                 "molntjanst": (ai.moln_inst(cfg) or {}).get("leverantor") or "",
                                  "skola": cfg.get("skola") or "",
                                  "program": cfg.get("program") or "",
                                  "ansvarig": cfg.get("ansvarig") or "",
@@ -410,9 +411,13 @@ class Svar(BaseHTTPRequestHandler):
                                  "tid": time.strftime("%H:%M:%S")})
                 return
             if v == "/api/lista":
+                cfg = las_config()
                 d = lager.lista()
-                d["bildmodell"] = ai.valj_modell()
+                d["bildmodell"] = ai.valj_modell(cfg) or ai.molnmodell(cfg)
                 self._json(200, d)
+                return
+            if v == "/api/ai-koll":
+                self._ai_koll()
                 return
             if v == "/api/logg":
                 self._json(200, {"logg": lager.logg(80)})
@@ -444,6 +449,32 @@ class Svar(BaseHTTPRequestHandler):
             self._fel(500, f"{type(exc).__name__}: {exc}")
             return
         self._fel(404, "finns inte")
+
+    def _ai_koll(self):
+        """Svarar på vad bildanalysen använder — och vad som är fel om något är det.
+
+        Frågar molntjänsten vilka modeller nyckeln får använda. Nyckeln själv
+        lämnar aldrig servern; svaret säger bara om den finns."""
+        cfg = las_config()
+        inst = ai.moln_inst(cfg)
+        if not inst:
+            self._json(200, {"leverantor": "ollama (lokalt)",
+                             "modell": ai.valj_modell(cfg),
+                             "modeller": ai.tillgangliga(),
+                             "fel": "" if ai.valj_modell(cfg) else
+                                    "ingen lokal bildmodell hittad",
+                             "nyckel": "nej"})
+            return
+        lista, fel = ai.lista_modeller(inst)
+        svar = {"leverantor": inst["leverantor"],
+                "modell": inst["modell"],
+                "anvand_modell": ai.molnmodell(cfg),
+                "nyckel": "ja",
+                "antal_modeller": len(lista),
+                "modeller": lista[:40],
+                "vald_av_listan": ai.valj_bildmodell(lista, inst["leverantor"]),
+                "fel": fel or ""}
+        self._json(200, svar)
 
     def _fil(self, namn):
         with open(os.path.join(HERE, namn), "rb") as fh:
@@ -687,14 +718,21 @@ def main():
     else:
         print(f"  datorn : http://127.0.0.1:{PORT}")
         print(f"  mobil  : http://{lan_ip()}:{PORT}/?t={cfg['token']}")
-    print(f"  bild-AI: {modell or 'ingen bildmodell — hämta med: ollama pull ' + ai.STANDARD_MODELL}")
+    if modell:
+        print(f"  bild-AI: {modell}")
+    elif ai.moln_inst(cfg):
+        # I molnet finns ingen Ollama. Namnet valideras inte här — det görs
+        # vid första bilden, och då byts ett dött namn ut automatiskt.
+        print(f"  bild-AI: {ai.molnmodell(cfg)} hos {ai.moln_inst(cfg)['leverantor']} (moln)")
+    else:
+        print(f"  bild-AI: ingen bildmodell — hämta med: ollama pull {ai.STANDARD_MODELL}")
     print(f"  poster : {len(lager.las()['poster'])} i inventeringen")
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Svar)
     srv.daemon_threads = True
 
     # Värm bildmodellen i bakgrunden. Den som fotar med telefonen ska inte
     # behöva vänta på att modellen laddas in första gången.
-    if modell:
+    if modell and not ai.moln_inst(cfg):
         def _varm():
             t0 = time.time()
             if ai.varm(cfg):
