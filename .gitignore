@@ -1,0 +1,7 @@
+# Hemligheter och lokal data — ska aldrig till GitHub
+config.json
+data/
+.prov-*/
+__pycache__/
+*.pyc
+*.log

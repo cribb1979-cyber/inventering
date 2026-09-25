@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101820">
+<title>SYS.VVS — inventering</title>
+<style>
+:root{
+  --bg:#0e1519; --panel:#16212a; --panel2:#1d2b36; --line:#283a47;
+  --text:#e8f0f4; --dim:#8fa6b4; --accent:#3fb6a8; --accent2:#2b8f84;
+  --rod:#e0685f; --gul:#e0b04f; --gron:#5cc27a; --radie:13px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+  font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding-bottom:74px;overscroll-behavior-y:contain}
+header{position:sticky;top:0;z-index:20;background:linear-gradient(#0e1519f2,#0e1519e0);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:11px 14px 9px}
+h1{margin:0;font-size:16.5px;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
+h1 .punkt{width:8px;height:8px;border-radius:50%;background:var(--gron);flex:none}
+h1 .punkt.av{background:var(--rod)}
+h1 .punkt.vantar{background:var(--gul)}
+.under{color:var(--dim);font-size:12px;margin-top:3px;display:flex;
+  justify-content:space-between;gap:10px}
+main{padding:12px 12px 20px;max-width:820px;margin:0 auto}
+.vy{display:none}.vy.pa{display:block}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:30;display:flex;
+  background:#121c24f2;backdrop-filter:blur(10px);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--dim);padding:9px 2px 10px;
+  font-size:10.5px;font-family:inherit;display:flex;flex-direction:column;
+  align-items:center;gap:3px;cursor:pointer}
+nav button .ikon{font-size:19px;line-height:1}
+nav button.pa{color:var(--accent)}
+.kort{background:var(--panel);border:1px solid var(--line);border-radius:var(--radie);
+  padding:11px 12px;margin-bottom:9px}
+.kort.mini{padding:9px 10px}
+.rad{display:flex;gap:10px;align-items:flex-start}
+.rad.mellan{justify-content:space-between;align-items:center}
+.vaxt{flex:1;min-width:0}
+.namn{font-weight:600;font-size:15px;overflow-wrap:anywhere}
+.meta{color:var(--dim);font-size:12.5px;margin-top:2px;overflow-wrap:anywhere}
+.marke{display:inline-block;font-size:10.5px;padding:2px 7px;border-radius:99px;
+  background:var(--panel2);color:var(--dim);border:1px solid var(--line);margin-right:4px}
+.marke.maskin{color:#8fb8ff;border-color:#2c4a7a}
+.marke.verktyg{color:#ffcf8f;border-color:#7a5c2c}
+.marke.material{color:#8fe0b8;border-color:#2c7a5a}
+.marke.inredning{color:#d3a6ff;border-color:#5c3a7a}
+.marke.skydd{color:#ff9f9f;border-color:#7a2c2c}
+.marke.forbrukning{color:#9fe8ff;border-color:#2c6a7a}
+.marke.ok{background:#16301f;color:var(--gron);border-color:#245c33}
+.marke.service{background:#33290f;color:var(--gul);border-color:#6b5416}
+.marke.trasig,.marke.borta{background:#331717;color:var(--rod);border-color:#6b2626}
+.marke.utland{background:#1b2733;color:#9fc6ff}
+.marke.behov-investera{background:#33290f;color:var(--gul);border-color:#6b5416}
+.marke.behov-behall{background:#16301f;color:var(--gron);border-color:#245c33}
+.marke.behov-avveckla{background:#331717;color:var(--rod);border-color:#6b2626}
+.marke.behov-vetej{background:#1b2733;color:#8fa6b4}
+.marke.prio-hog{color:#ffb4ac;border-color:#7a3430;font-weight:600}
+.kr{color:var(--dim);font-size:12.5px}
+img.thumb{width:56px;height:56px;object-fit:cover;border-radius:9px;
+  border:1px solid var(--line);flex:none;background:var(--panel2)}
+.antal{display:flex;align-items:center;gap:0;flex:none;background:var(--panel2);
+  border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.antal button{background:none;border:0;color:var(--text);font-size:19px;
+  width:38px;height:38px;cursor:pointer;font-family:inherit}
+.antal button:active{background:var(--accent2)}
+.antal .v{min-width:44px;text-align:center;font-variant-numeric:tabular-nums;
+  font-weight:600;font-size:15px}
+.antal .v small{display:block;font-size:9.5px;color:var(--dim);font-weight:400}
+button.knapp{background:var(--accent2);color:#04120f;border:0;border-radius:10px;
+  padding:10px 14px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer}
+button.knapp.prim{background:var(--accent)}
+button.knapp.flat{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+button.knapp.rod{background:#5c2320;color:#ffd9d6}
+button.knapp:disabled{opacity:.55;cursor:default}
+button.liten{padding:7px 10px;font-size:12.5px;border-radius:9px}
+label{display:block;font-size:12px;color:var(--dim);margin:10px 0 4px}
+input,select,textarea{width:100%;background:var(--panel2);color:var(--text);
+  border:1px solid var(--line);border-radius:10px;padding:10px 11px;font-size:15px;
+  font-family:inherit}
+textarea{min-height:64px;resize:vertical}
+.par{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.par3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.tabbar{display:flex;gap:7px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
+.tabbar::-webkit-scrollbar{display:none}
+.tabbar button{flex:none;background:var(--panel);border:1px solid var(--line);
+  color:var(--dim);border-radius:99px;padding:6px 12px;font-size:12.5px;
+  font-family:inherit;cursor:pointer;white-space:nowrap}
+.tabbar button.pa{background:var(--accent2);color:#04120f;border-color:var(--accent2);font-weight:600}
+#kamera{background:var(--panel);border:1.5px dashed var(--line);border-radius:var(--radie);
+  padding:22px 14px;text-align:center;cursor:pointer}
+#kamera:active{border-color:var(--accent)}
+#kamera .stor{font-size:33px;line-height:1}
+#fotobild{width:100%;max-height:290px;object-fit:contain;border-radius:var(--radie);
+  border:1px solid var(--line);background:var(--panel2);margin-bottom:8px}
+.tom{color:var(--dim);text-align:center;padding:34px 16px;font-size:13.5px}
+.varning{background:#33290f;border:1px solid #6b5416;color:#ffe0a3;
+  border-radius:var(--radie);padding:11px 12px;font-size:13px;margin-bottom:11px}
+.fel{background:#331717;border-color:#6b2626;color:#ffd9d6}
+.okboks{background:#16301f;border-color:#245c33;color:#c9f0d6}
+.modal{position:fixed;inset:0;background:#000a;z-index:50;display:none;
+  align-items:flex-end;justify-content:center}
+.modal.pa{display:flex}
+.modal .ark{background:var(--panel);border:1px solid var(--line);
+  border-radius:16px 16px 0 0;padding:16px 14px 22px;width:100%;max-width:820px;
+  max-height:88vh;overflow:auto}
+.modal h2{margin:0 0 4px;font-size:16px}
+.sparar{display:inline-block;width:13px;height:13px;border:2px solid var(--dim);
+  border-top-color:var(--accent);border-radius:50%;animation:snurr .7s linear infinite}
+@keyframes snurr{to{transform:rotate(360deg)}}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:500;font-size:11.5px;text-transform:uppercase}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.tyst{color:var(--dim);font-size:12px}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="punkt vantar" id="prick"></span> SYS.VVS <span class="tyst" id="vem"></span></h1>
+  <div class="under">
+    <span id="status">ansluter…</span>
+    <span id="synk" class="tyst"></span>
+  </div>
+</header>
+
+<main>
+  <!-- INVENTERING -->
+  <section class="vy pa" id="v-inventering">
+    <div class="tabbar" id="filter"></div>
+    <div id="sokruta">
+      <input id="sok" type="search" placeholder="Sök namn, placering, dimension…" autocomplete="off">
+    </div>
+    <div id="lista"></div>
+  </section>
+
+  <!-- LÄGG TILL -->
+  <section class="vy" id="v-ny">
+    <div id="nyfel"></div>
+    <div id="kameralage">
+      <div id="kamera">
+        <div class="stor">📷</div>
+        <div style="margin-top:7px;font-weight:600">Ta en bild på föremålet</div>
+        <div class="tyst" style="margin-top:4px">AI föreslår benämning, kategori och antal.<br>Ingenting sparas förrän du trycker Spara.</div>
+      </div>
+      <input id="fil" type="file" accept="image/*" capture="environment" hidden>
+      <div style="display:flex;gap:9px;margin-top:11px">
+        <button class="knapp flat" id="valjb" style="flex:1">Välj bland bilder</button>
+        <button class="knapp flat" id="utanbild" style="flex:1">Utan bild</button>
+      </div>
+    </div>
+    <div id="formlage" style="display:none">
+      <img id="fotobild" alt="">
+      <div id="analysruta"></div>
+      <form id="form" autocomplete="off">
+        <input type="hidden" id="f-id"><input type="hidden" id="f-bild">
+        <label>Benämning *</label>
+        <input id="f-namn" required placeholder="t.ex. Skruvdragare, Koppling koppar R15">
+        <div class="par">
+          <div><label>Kategori</label><select id="f-kategori"></select></div>
+          <div><label>Skick</label><select id="f-skick"></select></div>
+        </div>
+        <div class="par3">
+          <div><label>Antal</label><input id="f-antal" type="number" step="any" min="0" value="1" inputmode="decimal"></div>
+          <div><label>Enhet</label><input id="f-enhet" value="st"></div>
+          <div><label>Inköpsår</label><input id="f-inkopsar" inputmode="numeric" placeholder="2021"></div>
+        </div>
+        <div class="par">
+          <div><label>Placering</label><input id="f-placering" placeholder="Bänk 3, hylla B"></div>
+          <div><label>Dimension / art.nr</label><input id="f-dimension" placeholder="R15, DN20, 18V"></div>
+        </div>
+        <hr>
+        <div class="par">
+          <div><label>Investeringsbehov</label><select id="f-behov"></select></div>
+          <div><label>Prioritet</label><select id="f-prioritet"></select></div>
+        </div>
+        <div class="par">
+          <div><label>Pris/enhet (kr)</label><input id="f-pris" inputmode="decimal" placeholder="2490"></div>
+          <div><label>Program</label><input id="f-program" placeholder="VVS &amp; fastighet"></div>
+        </div>
+        <label>Tillverkare</label>
+        <input id="f-tillverkare" placeholder="Makita, Bahco…">
+        <label>Anteckning</label>
+        <textarea id="f-anteckning" placeholder="sladd skadad, två batterier…"></textarea>
+        <div style="display:flex;gap:9px;margin-top:14px">
+          <button class="knapp prim" type="submit" style="flex:2">Spara i inventeringen</button>
+          <button class="knapp flat" type="button" id="avbryt" style="flex:1">Avbryt</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- KALKYLARK -->
+  <section class="vy" id="v-kalkyl">
+    <div class="kort">
+      <div class="rad mellan">
+        <div><div class="namn">Exportera</div>
+          <div class="meta">Öppnas i LibreOffice/Excel på datorn</div></div>
+      </div>
+      <div style="display:flex;gap:9px;margin-top:11px;flex-wrap:wrap">
+        <button class="knapp prim" id="ex-xlsx" style="flex:1;min-width:150px">⬇ Kalkylark (.xlsx)</button>
+        <button class="knapp flat" id="ex-csv" style="flex:1;min-width:150px">⬇ Kommaseparerad (.csv)</button>
+      </div>
+      <div class="tyst" style="margin-top:9px">Sparas även i <code>data/export/</code> på datorn.</div>
+    </div>
+    <div class="kort">
+      <div class="namn">Sammanställning</div>
+      <div id="samman" style="margin-top:8px"></div>
+    </div>
+    <div class="kort">
+      <div class="namn">Inventeringens uppgifter</div>
+      <div class="meta">Följer med som rubrik i kalkylarket</div>
+      <div class="par">
+        <div><label>Skola</label><input id="i-skola" placeholder="Njudungsgymnasiet"></div>
+        <div><label>Program</label><input id="i-program" placeholder="VVS &amp; fastighet"></div>
+      </div>
+      <div class="par">
+        <div><label>Ansvarig lärare</label><input id="i-ansvarig" placeholder="Namn"></div>
+        <div><label>Fylls i senast</label><input id="i-deadline" type="date"></div>
+      </div>
+      <div style="display:flex;gap:9px;align-items:center;margin-top:11px">
+        <button class="knapp flat" id="spara-inst">Spara uppgifterna</button>
+        <span class="tyst" id="inst-kvitto"></span>
+      </div>
+      <div class="tyst" id="kvar" style="margin-top:8px"></div>
+    </div>
+    <div class="kort">
+      <div class="namn">Skicka till yrkeslärare</div>
+      <div class="meta">Kalkylarket skickas som bilaga. Ingenting skickas utan att du bekräftar.</div>
+      <label>Mottagare</label>
+      <input id="s-till" type="email" inputmode="email" placeholder="larare@skola.se">
+      <label>Ämne</label>
+      <input id="s-amne" placeholder="Inventering VVS — 2026-09-25">
+      <label>Brevtext</label>
+      <textarea id="s-text" style="min-height:120px"></textarea>
+      <div id="s-fel"></div>
+      <div style="display:flex;gap:9px;margin-top:11px">
+        <button class="knapp prim" id="s-knapp" style="flex:1">✉ Skicka kalkylarket</button>
+        <button class="knapp flat" id="s-aterstall" style="flex:1">Skriv om brevet</button>
+      </div>
+      <div class="tyst" id="s-kvitto" style="margin-top:9px"></div>
+    </div>
+    <div class="kort">
+      <div class="namn">Koppla telefonen</div>
+      <div class="meta">Samma inventering, samma server — allt du gör i telefonen syns direkt på datorn.</div>
+      <div style="text-align:center;margin-top:11px">
+        <img id="qr" alt="QR-kod" style="width:190px;height:190px;background:#fff;border-radius:11px;padding:7px">
+      </div>
+      <div class="tyst" id="mobilurl" style="text-align:center;margin-top:7px;word-break:break-all"></div>
+    </div>
+  </section>
+
+  <!-- LOGG -->
+  <section class="vy" id="v-logg">
+    <div id="logg"></div>
+  </section>
+</main>
+
+<nav>
+  <button class="pa" data-vy="inventering"><span class="ikon">📋</span>Inventering</button>
+  <button data-vy="ny"><span class="ikon">➕</span>Lägg till</button>
+  <button data-vy="kalkyl"><span class="ikon">📊</span>Kalkylark</button>
+  <button data-vy="logg"><span class="ikon">🕘</span>Historik</button>
+</nav>
+
+<div class="modal" id="modal"><div class="ark" id="ark"></div></div>
+
+<script>
+"use strict";
+// Token: kommer i adressen första gången telefonen öppnar appen (?t=…),
+// sparas sedan lokalt så man slipper skriva den igen.
+const P = new URLSearchParams(location.search);
+if (P.get("t")) { localStorage.setItem("vvs-token", P.get("t"));
+  history.replaceState(null, "", location.pathname); }
+const TOKEN = localStorage.getItem("vvs-token") || "";
+
+let DATA = {poster: [], kategorier: [], skick: [], version: 0, bildmodell: null};
+let MODELL = null, VERSION = 0, FILTER = "", SOK = "", VY = "inventering";
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+  .replace(/"/g,"&quot;");
+const nummer = n => Number(n) % 1 === 0 ? String(Number(n)) : Number(n).toFixed(1);
+
+async function api(vag, kropp) {
+  const o = {headers: {"X-Token": TOKEN}};
+  if (kropp !== undefined) {
+    o.method = "POST";
+    o.headers["Content-Type"] = "application/json";
+    o.body = JSON.stringify(kropp);
+  }
+  const r = await fetch(vag, o);
+  if (r.status === 401) throw new Error("Token stämmer inte. Öppna appen via QR-koden på datorn.");
+  const d = await r.json();
+  if (d.fel) throw new Error(d.fel);
+  return d;
+}
+
+function sortsNamn(k) {
+  const p = (DATA.kategorier || []).find(x => x[0] === k);
+  return p ? p[1] : (k || "annat");
+}
+function uppslag(lista, k) {
+  const p = (DATA[lista] || []).find(x => x[0] === k);
+  return p ? p[1] : (k || "");
+}
+const behovText = k => uppslag("behov", k);
+const prioText  = k => uppslag("prioritet", k);
+const kr = n => Number(n || 0).toLocaleString("sv-SE", {maximumFractionDigits: 0});
+
+/* ---------------------------------------------------------------- listan */
+function visa(poster) {
+  if (!poster.length) {
+    $("#lista").innerHTML = '<div class="tom">Ingenting här än.<br>Tryck <b>Lägg till</b> och ta en bild.</div>';
+    return;
+  }
+  $("#lista").innerHTML = poster.map(p => {
+    const felt = p.skick === "trasig" || p.skick === "borta";
+    const bild = p.bild
+      ? `<img class="thumb" src="/bilder/${encodeURIComponent(p.bild)}?t=${encodeURIComponent(TOKEN)}" alt="" loading="lazy">`
+      : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;font-size:22px">${p.kategori === "material" ? "🔩" : p.kategori === "inredning" ? "🪑" : "🔧"}</div>`;
+    const detaljer = [p.dimension, p.tillverkare, p.inkopsar ? "inköp " + p.inkopsar : "",
+                      p.placering].filter(Boolean).join(" · ");
+    const skick = p.skick && p.skick !== "ok"
+      ? `<span class="marke ${esc(p.skick)}">${esc(uppslag("skick", p.skick))}</span>` : "";
+    const behov = p.investeringsbehov
+      ? `<span class="marke behov-${esc(p.investeringsbehov)}">${esc(behovText(p.investeringsbehov))}</span>` : "";
+    const prio = p.prioritet && p.prioritet !== "lag"
+      ? `<span class="marke prio-${esc(p.prioritet)}">${esc(prioText(p.prioritet))} prioritet</span>` : "";
+    const pris = Number(p.pris) > 0
+      ? `${kr(p.pris)} kr/enhet${Number(p.antal) > 1 ? " · " + kr(Number(p.pris) * Number(p.antal)) + " kr totalt" : ""}`
+      : "";
+    return `<div class="kort" data-id="${esc(p.id)}"${felt ? ' style="border-color:#5c2a2a"' : ""}>
+      <div class="rad">
+        ${bild}
+        <div class="vaxt">
+          <div class="namn">${esc(p.namn)}</div>
+          <div class="meta">
+            <span class="marke ${esc(p.kategori)}">${esc(sortsNamn(p.kategori))}</span>${skick}${behov}${prio}
+          </div>
+          ${detaljer ? `<div class="meta">${esc(detaljer)}</div>` : ""}
+          ${pris ? `<div class="kr">${pris}</div>` : ""}
+          ${p.anteckning ? `<div class="meta" style="font-style:italic">${esc(p.anteckning)}</div>` : ""}
+        </div>
+        <div class="antal">
+          <button data-rakna="-1" title="Räkna av">−</button>
+          <div class="v">${nummer(p.antal)}<small>${esc(p.enhet || "st")}</small></div>
+          <button data-rakna="1" title="Lägg till">+</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:7px;margin-top:9px">
+        <button class="knapp flat liten" data-redigera>Ändra</button>
+        <button class="knapp flat liten" data-foto>📷 Ny bild</button>
+        <button class="knapp flat liten rod" data-radera style="margin-left:auto">Ta bort</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function filtrera() {
+  const s = SOK.trim().toLowerCase();
+  return DATA.poster.filter(p => {
+    if (FILTER && p.kategori !== FILTER) return false;
+    if (!s) return true;
+    return [p.namn, p.placering, p.dimension, p.tillverkare, p.anteckning,
+            p.inkopsar, p.skick].filter(Boolean).join(" ").toLowerCase().includes(s);
+  });
+}
+
+function ritaFilter() {
+  const räkn = {};
+  DATA.poster.forEach(p => räkn[p.kategori] = (räkn[p.kategori] || 0) + 1);
+  $("#filter").innerHTML =
+    `<button class="${FILTER === "" ? "pa" : ""}" data-f="">Alla (${DATA.poster.length})</button>` +
+    (DATA.kategorier || []).filter(k => räkn[k[0]]).map(([id, namn]) =>
+      `<button class="${FILTER === id ? "pa" : ""}" data-f="${esc(id)}">${esc(namn)} (${räkn[id]})</button>`
+    ).join("");
+}
+
+function rita() { ritaFilter(); visa(filtrera()); sammanstallning(); }
+
+function sammanstallning() {
+  const perKat = {};
+  DATA.poster.forEach(p => {
+    const k = perKat[p.kategori] = perKat[p.kategori] || {n: 0, antal: 0, trasiga: 0};
+    k.n++; k.antal += Number(p.antal) || 0;
+    if (p.skick === "trasig" || p.skick === "borta") k.trasiga++;
+  });
+  const rader = (DATA.kategorier || []).filter(([id]) => perKat[id]).map(([id, namn]) => {
+    const k = perKat[id];
+    return `<tr><td><span class="marke ${esc(id)}">${esc(namn)}</span></td>
+      <td class="num">${k.n}</td><td class="num">${nummer(k.antal)}</td>
+      <td class="num"${k.trasiga ? ' style="color:var(--rod)"' : ' class="tyst"'}>${k.trasiga || "–"}</td></tr>`;
+  }).join("");
+  // Bedömningen är själva poängen med inventeringen: var behöver vi satsa?
+  const perBehov = {};
+  let summaAllt = 0, antalPris = 0;
+  DATA.poster.forEach(p => {
+    const b = p.investeringsbehov || "ej_bedomt";
+    const k = perBehov[b] = perBehov[b] || {n: 0, pris: 0};
+    k.n++;
+    const summa = Number(p.pris) > 0 ? Number(p.pris) * Number(p.antal || 0) : 0;
+    if (Number(p.pris) > 0) antalPris++;
+    k.pris += summa;
+    summaAllt += summa;
+  });
+  const behovsRader = Object.entries(perBehov)
+    .sort((a, b) => b[1].pris - a[1].pris)
+    .map(([b, k]) => `<tr>
+      <td>${b === "ej_bedomt" ? '<span class="tyst">Ej bedömt</span>'
+        : `<span class="marke behov-${esc(b)}">${esc(behovText(b))}</span>`}</td>
+      <td class="num">${k.n}</td>
+      <td class="num">${k.pris ? kr(k.pris) + " kr" : '<span class="tyst">–</span>'}</td></tr>`).join("");
+  const saknarPris = DATA.poster.length - antalPris;
+  $("#samman").innerHTML =
+    `<table><thead><tr><th>Kategori</th><th class="num">Poster</th>
+      <th class="num">Summa antal</th><th class="num">Trasig/saknas</th></tr></thead><tbody>${rader}</tbody></table>
+     <hr>
+     <table><thead><tr><th>Investeringsbehov</th><th class="num">Poster</th>
+      <th class="num">Summa</th></tr></thead><tbody>${behovsRader}</tbody>
+      <tfoot><tr><th>Totalt</th><th class="num">${DATA.poster.length}</th>
+      <th class="num">${kr(summaAllt)} kr</th></tr></tfoot></table>` +
+    (saknarPris ? `<div class="tyst" style="margin-top:8px">${saknarPris} poster saknar pris
+      — summan blir för låg tills de är ifyllda.</div>` : "");
+}
+
+/* ---------------------------------------------------------------- händelser */
+document.addEventListener("click", async e => {
+  const knapp = e.target.closest("button");
+  if (knapp && knapp.dataset.vy) { byt(knapp.dataset.vy); return; }
+  if (knapp && knapp.dataset.f !== undefined) {
+    FILTER = knapp.dataset.f; rita(); return;
+  }
+  const kort = e.target.closest(".kort[data-id]");
+  if (!kort) return;
+  const id = kort.dataset.id;
+  const post = DATA.poster.find(p => p.id === id);
+  try {
+    if (knapp && knapp.dataset.rakna) {
+      const delta = Number(knapp.dataset.rakna);
+      const d = await api("/api/rakna", {id, delta});
+      Object.assign(post, d.post);
+      knapp.parentElement.querySelector(".v").innerHTML =
+        nummer(post.antal) + `<small>${esc(post.enhet || "st")}</small>`;
+      synkaVersion(d.version);
+      return;
+    }
+    if (knapp && knapp.dataset.redigera) {
+      MODELL = null;
+      laggUppFormulär(post, post.bild);
+      return;
+    }
+    if (knapp && knapp.dataset.foto) {
+      $("#fil").dataset.id = id;
+      $("#fil").click();
+      return;
+    }
+    if (knapp && knapp.dataset.radera) {
+      if (!confirm(`Ta bort "${post.namn}" ur inventeringen?`)) return;
+      const d = await api("/api/radera", {id, bekrafta: true});
+      DATA.poster = DATA.poster.filter(p => p.id !== id);
+      synkaVersion(d.version); rita();
+    }
+  } catch (fel) { alert(fel.message); }
+});
+
+function byt(vy) {
+  VY = vy;
+  document.querySelectorAll("nav button").forEach(b =>
+    b.classList.toggle("pa", b.dataset.vy === vy));
+  document.querySelectorAll(".vy").forEach(s =>
+    s.classList.toggle("pa", s.id === "v-" + vy));
+  if (vy === "logg") laddaLogg();
+  if (vy === "kalkyl") $("#qr").src = "/api/qr?t=" + encodeURIComponent(TOKEN) +
+    "&n=" + Math.random();
+  window.scrollTo(0, 0);
+}
+
+$("#sok").addEventListener("input", e => { SOK = e.target.value; visa(filtrera()); });
+
+/* ---------------------------------------------------------------- bild + AI */
+$("#kamera").addEventListener("click", () => { $("#fil").dataset.id = ""; $("#fil").click(); });
+$("#valjb").addEventListener("click", () => { $("#fil").dataset.id = ""; $("#fil").click(); });
+$("#utanbild").addEventListener("click", () => { MODELL = null; laggUppFormulär({}, ""); });
+
+$("#fil").addEventListener("change", async e => {
+  const fil = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!fil) return;
+  const id = e.target.dataset.id;
+  try {
+    const dataUrl = await krymp(fil);
+    if (id) {                              // ny bild på en befintlig post
+      $("#prick").className = "punkt vantar";
+      $("#status").textContent = "analyserar bilden…";
+      const d = await api("/api/bild", {bild: dataUrl});
+      const post = await api("/api/andra", {id, bild: d.fil});
+      Object.assign(DATA.poster.find(p => p.id === id), post.post);
+      synkaVersion(post.version); rita();
+      visaForslag(d);
+      return;
+    }
+    $("#formlage").style.display = "block";
+    $("#kameralage").style.display = "none";
+    $("#fotobild").src = dataUrl;
+    $("#analysruta").innerHTML =
+      '<div class="varning"><span class="sparar"></span> AI tittar på bilden… ' +
+      '<span class="tyst">första gången kan det ta en stund</span></div>';
+    laggUppFormulär({}, "", dataUrl);
+    const d = await api("/api/bild", {bild: dataUrl});
+    visaForslag(d);
+  } catch (fel) {
+    $("#analysruta").innerHTML = `<div class="varning fel">${esc(fel.message)}</div>`;
+  } finally {
+    $("#prick").className = "punkt";
+  }
+});
+
+/* En telefonbild är 3–5 MB. Vi skalar ner i telefonen innan den skickas,
+   så att mobilnätet inte behöver bära mer än nödvändigt. */
+function krymp(fil, maxsida = 1600, kvalitet = 0.85) {
+  return new Promise((klar, fel) => {
+    const l = new FileReader();
+    l.onerror = () => fel(new Error("kunde inte läsa bilden"));
+    l.onload = () => {
+      const im = new Image();
+      im.onerror = () => fel(new Error("bilden gick inte att öppna"));
+      im.onload = () => {
+        let {width: w, height: h} = im;
+        if (Math.max(w, h) > maxsida) {
+          const s = maxsida / Math.max(w, h);
+          w = Math.round(w * s); h = Math.round(h * s);
+        }
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        c.getContext("2d").drawImage(im, 0, 0, w, h);
+        klar(c.toDataURL("image/jpeg", kvalitet));
+      };
+      im.src = l.result;
+    };
+    l.readAsDataURL(fil);
+  });
+}
+
+function visaForslag(d) {
+  if (d.fel) {
+    $("#analysruta").innerHTML = `<div class="varning">${esc(d.fel)}</div>`;
+    if (!d.fil) return;
+    $("#f-bild").value = d.fil;
+    return;
+  }
+  const f = d.forslag || {};
+  if (f.namn) $("#f-namn").value = f.namn;
+  if (f.kategori) $("#f-kategori").value = f.kategori;
+  if (f.antal) $("#f-antal").value = f.antal;
+  if (f.enhet) $("#f-enhet").value = f.enhet;
+  if (f.dimension) $("#f-dimension").value = f.dimension;
+  if (f.tillverkare) $("#f-tillverkare").value = f.tillverkare;
+  if (f.anteckning) $("#f-anteckning").value = f.anteckning;
+  if (f.skick) $("#f-skick").value = f.skick;
+  if (f.investeringsbehov) $("#f-behov").value = f.investeringsbehov;
+  if (d.fil) $("#f-bild").value = d.fil;
+  const osaker = f.sakerhet === "osäker";
+  $("#analysruta").innerHTML =
+    `<div class="varning ${osaker ? "" : "okboks"}">
+      <b>${osaker ? "AI är osäker — kontrollera fälten" : "AI-förslag ifyllt"}</b><br>
+      ${esc([f.namn, f.dimension, f.tillverkare].filter(Boolean).join(" · "))}
+      <span class="tyst">(${esc(d.modell || "modell")})</span><br>
+      Ingenting sparas förrän du trycker Spara.
+    </div>`;
+}
+
+function laggUppFormulär(post, bild, dataUrl) {
+  $("#formlage").style.display = "block";
+  $("#kameralage").style.display = "none";
+  $("#f-id").value = post.id || "";
+  $("#f-bild").value = post.bild || bild || "";
+  $("#f-namn").value = post.namn || "";
+  $("#f-kategori").value = post.kategori || "annat";
+  $("#f-skick").value = post.skick || "ok";
+  $("#f-antal").value = post.antal != null ? post.antal : 1;
+  $("#f-enhet").value = post.enhet || "st";
+  $("#f-inkopsar").value = post.inkopsar || "";
+  $("#f-placering").value = post.placering || "";
+  $("#f-dimension").value = post.dimension || "";
+  $("#f-tillverkare").value = post.tillverkare || "";
+  $("#f-anteckning").value = post.anteckning || "";
+  $("#f-behov").value = post.investeringsbehov || "";
+  $("#f-prioritet").value = post.prioritet || "";
+  $("#f-pris").value = Number(post.pris) > 0 ? post.pris : "";
+  $("#f-program").value = post.program || "";
+  $("#fotobild").style.display = (dataUrl || post.bild) ? "block" : "none";
+  if (dataUrl) $("#fotobild").src = dataUrl;
+  else if (post.bild) $("#fotobild").src = `/bilder/${encodeURIComponent(post.bild)}?t=${encodeURIComponent(TOKEN)}`;
+  if (!dataUrl) $("#analysruta").innerHTML = "";
+  byt("ny");
+  if (!dataUrl) $("#f-namn").focus();
+}
+
+$("#avbryt").addEventListener("click", nollstall);
+function nollstall() {
+  $("#form").reset(); $("#f-id").value = "";
+  $("#analysruta").innerHTML = ""; $("#formlage").style.display = "none";
+  $("#kameralage").style.display = "block";
+  byt("inventering");
+}
+
+$("#form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const kropp = {
+    namn: $("#f-namn").value.trim(),
+    kategori: $("#f-kategori").value,
+    skick: $("#f-skick").value,
+    antal: $("#f-antal").value,
+    enhet: $("#f-enhet").value.trim() || "st",
+    inkopsar: $("#f-inkopsar").value.trim(),
+    placering: $("#f-placering").value.trim(),
+    dimension: $("#f-dimension").value.trim(),
+    tillverkare: $("#f-tillverkare").value.trim(),
+    anteckning: $("#f-anteckning").value.trim(),
+    bild: $("#f-bild").value,
+    investeringsbehov: $("#f-behov").value,
+    prioritet: $("#f-prioritet").value,
+    pris: $("#f-pris").value.trim(),
+    program: $("#f-program").value.trim(),
+  };
+  if (!kropp.namn) return;
+  const id = $("#f-id").value;
+  try {
+    let d;
+    if (id) { d = await api("/api/andra", {id, ...kropp}); 
+      Object.assign(DATA.poster.find(p => p.id === id), d.post); }
+    else { d = await api("/api/ny", kropp); DATA.poster.push(d.post); }
+    synkaVersion(d.version);
+    nollstall(); rita();
+  } catch (fel) {
+    $("#nyfel").innerHTML = `<div class="varning fel">${esc(fel.message)}</div>`;
+  }
+});
+
+/* ---------------------------------------------------------------- historik */
+async function laddaLogg() {
+  try {
+    const d = await api("/api/logg");
+    $("#logg").innerHTML = '<div class="kort">' + (d.logg.length
+      ? d.logg.map(r => `<div style="padding:5px 0;border-bottom:1px solid var(--line)">
+          <span class="tyst">${esc(r.tid)}</span> <b>${esc(r.handling)}</b>
+          <div class="meta">${esc(r.text)}</div></div>`).join("")
+      : '<div class="tom">Ingen historik än.</div>') + "</div>";
+  } catch (fel) { $("#logg").innerHTML = `<div class="varning fel">${esc(fel.message)}</div>`; }
+}
+
+/* ---------------------------------------------------------------- export */
+$("#ex-xlsx").addEventListener("click", () => exportera("xlsx"));
+$("#ex-csv").addEventListener("click", () => exportera("csv"));
+function exportera(fmt) {
+  const d = DATA.poster.length;
+  if (!d) { alert("Inventeringen är tom."); return; }
+  location.href = `/api/kalkyl?format=${fmt}&t=${encodeURIComponent(TOKEN)}`;
+}
+
+/* ------------------------------------------------------- uppgifter + utskick */
+let INST = {};
+
+async function laddaInstallningar() {
+  try {
+    INST = await api("/api/installningar");
+    $("#i-skola").value = INST.skola || "";
+    $("#i-program").value = INST.program || "";
+    $("#i-ansvarig").value = INST.ansvarig || "";
+    $("#i-deadline").value = INST.deadline || "";
+    $("#s-text").value = INST.standardbrev || "";
+    $("#s-amne").value = "Inventering " + (INST.program || "VVS") + " — " +
+      new Date().toLocaleDateString("sv-SE");
+    visaKvar();
+  } catch (fel) {
+    $("#inst-kvitto").textContent = fel.message;
+  }
+}
+
+function visaKvar() {
+  if (!INST.deadline_text) { $("#kvar").textContent = ""; return; }
+  const d = INST.dagar_kvar;
+  const bråd = d != null && d <= 7;
+  const förbi = d != null && d < 0;
+  $("#kvar").innerHTML = "Fylls i senast <b>" + esc(INST.deadline_text) + "</b> — " +
+    (förbi ? '<span style="color:var(--rod)">deadline har passerat</span>'
+           : '<span style="color:' + (bråd ? "var(--gul)" : "var(--dim)") + '">' +
+             d + " dagar kvar</span>");
+}
+
+$("#spara-inst").addEventListener("click", async () => {
+  $("#inst-kvitto").textContent = "sparar…";
+  try {
+    const d = await api("/api/installningar", {
+      skola: $("#i-skola").value, program: $("#i-program").value,
+      ansvarig: $("#i-ansvarig").value, deadline: $("#i-deadline").value,
+    });
+    INST.deadline_text = d.deadline_text; INST.deadagar = d.dagar_kvar;
+    INST.dagar_kvar = d.dagar_kvar;
+    visaKvar();
+    $("#inst-kvitto").textContent = "sparat";
+    setTimeout(() => $("#inst-kvitto").textContent = "", 2500);
+  } catch (fel) { $("#inst-kvitto").textContent = fel.message; }
+});
+
+$("#s-aterstall").addEventListener("click", async () => {
+  await laddaInstallningar();
+  $("#s-kvitto").textContent = "brevet återskapat från uppgifterna";
+});
+
+$("#s-knapp").addEventListener("click", async () => {
+  const till = $("#s-till").value.trim();
+  if (!till) { $("#s-fel").innerHTML = '<div class="varning fel">Fyll i mottagarens adress.</div>'; return; }
+  if (!DATA.poster.length) { $("#s-fel").innerHTML = '<div class="varning fel">Inventeringen är tom.</div>'; return; }
+  if (!confirm(`Skicka kalkylarket med ${DATA.poster.length} poster till\n${till}?`)) return;
+  const k = $("#s-knapp");
+  k.disabled = true; k.textContent = "skickar…";
+  try {
+    const d = await api("/api/skicka", {
+      till, bekrafta: true, amne: $("#s-amne").value.trim(), text: $("#s-text").value,
+    });
+    $("#s-fel").innerHTML = "";
+    $("#s-kvitto").innerHTML = '<span style="color:var(--gron)">✓ ' + esc(d.text) +
+      " · " + d.poster + " poster · " + esc(d.fil) + "</span>";
+  } catch (fel) {
+    $("#s-fel").innerHTML = `<div class="varning fel">${esc(fel.message)}</div>`;
+  } finally {
+    k.disabled = false; k.textContent = "✉ Skicka kalkylarket";
+  }
+});
+
+/* ---------------------------------------------------------------- synk
+   Telefonen och datorn tittar på samma server. Vi frågar efter versionen
+   varannan sekund och ritar om bara när något faktiskt ändrats. */
+function synkaVersion(v) { VERSION = v; $("#synk").textContent = "sparat " + new Date().toLocaleTimeString("sv-SE").slice(0, 5); }
+
+async function polla() {
+  try {
+    const d = await fetch("/api/status", {headers: {"X-Token": TOKEN}}).then(r => r.json());
+    if (d.fel) throw new Error(d.fel);
+    $("#prick").className = "punkt";
+    MODELL = d.bildmodell;
+    $("#vem").textContent = location.hostname === "127.0.0.1" || location.hostname === "localhost" ? "(datorn)" : "(mobil)";
+    $("#status").innerHTML = MODELL
+      ? "bild-AI: " + esc(MODELL)
+      : 'ingen bildmodell — på datorn: <code>ollama pull ' +
+        esc(d.standard_modell || "qwen2.5vl:3b") + "</code>";
+    $("#mobilurl").textContent = d.lan + "/?t=" + d.token;
+    if (!INST.deadline_text && d.deadline) {     // reservväg om hämtningen föll
+      INST.deadline_text = d.deadline;
+      INST.dagar_kvar = d.dagar_kvar;
+      visaKvar();
+    }
+    if (d.version !== VERSION) {
+      VERSION = d.version;
+      const l = await api("/api/lista");
+      DATA = l; rita();
+    }
+  } catch (fel) {
+    $("#prick").className = "punkt av";
+    $("#status").textContent = "tappade kontakten — försöker igen";
+  }
+}
+
+/* ---------------------------------------------------------------- start */
+(async function start() {
+  $("#f-kategori").innerHTML = "";
+  try {
+    const l = await api("/api/lista");
+    DATA = l;
+    $("#f-kategori").innerHTML = l.kategorier.map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join("");
+    $("#f-skick").innerHTML = l.skick.map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join("");
+    $("#f-behov").innerHTML = '<option value="">Ej bedömt</option>' +
+      l.behov.map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join("");
+    $("#f-prioritet").innerHTML = '<option value="">Ingen</option>' +
+      l.prioritet.map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join("");
+    VERSION = l.version;
+    rita();
+    await laddaInstallningar();
+    $("#f-program").value = INST.program || "";
+  } catch (fel) {
+    $("#lista").innerHTML = `<div class="varning fel">${esc(fel.message)}</div>`;
+  }
+  polla();
+  setInterval(polla, 2000);
+})();
+</script>
+</body>
+</html>

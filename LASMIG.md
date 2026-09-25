@@ -1,0 +1,114 @@
+# SYS.VVS — inventering av VVS-verkstaden
+
+Inventerar utrustningen i VVS-verkstadens lokaler: maskiner, verktyg,
+material och inredning. Fotar man ett föremål med telefonen föreslår en
+lokal AI vad det är. Allt hamnar i ett kalkylark som går att exportera och
+dela med yrkesläraren för programmet.
+
+Inventeringen är **levande** — föremål kan ändras, räknas av och läggas till
+när som helst. Telefonen och datorn ser samma sak.
+
+## Öppna
+
+* Skrivbordsikonen **SYS.VVS**, eller
+* startmenyn → SYS.VVS, eller
+* `vvsinv` i en terminal
+
+## På telefonen
+
+1. Starta appen på datorn (`vvsinv --qr` skriver ut adressen och en QR-kod).
+2. Telefonen måste vara på **samma nät** som datorn.
+3. Skanna QR-koden, eller skriv in adressen i mobilens webbläsare.
+4. Lägg sidan på hemskärmen — då öppnas den som en app.
+
+Adressen innehåller en token. Utan token nekar servern allt utifrån; från
+datorn (127.0.0.1) behövs ingen. Token ligger i `config.json` (rättighet 600)
+och skickas aldrig vidare någon annanstans.
+
+## Vad den gör
+
+| Flik | Vad som händer |
+|---|---|
+| **Inventering** | Allt som finns, sorterat per kategori. Här räknar du av (−/+) och ändrar uppgifter. |
+| **Lägg till** | Skriv in ett föremål, eller **ta ett foto** — AI:n föreslår namn, kategori, antal, skick och investeringsbehov. |
+| **Kalkylark** | Sammanställning per investeringsbehov, export till Excel/CSV och knappen som mejlar arket till yrkesläraren. |
+| **Historik** | Varje ändring, vem som gjorde den och när. |
+
+## Investeringsbehov
+
+Varje föremål får en bedömning: **Behåll**, **Investera**, **Avveckla**
+eller **Vet ej**. Det är den kolumnen inventeringen ska leda fram till — var
+behöver skolan satsa, och var behövs det inte lika mycket.
+
+**Pris sätter en människa.** AI:n gissar aldrig ett pris. Saknas priser blir
+summan för låg, och arket varnar om det.
+
+## Kalkylarket
+
+Rubriken visar skola, program, ansvarig lärare, datum och när det ska vara
+ifyllt. Kolumnerna: namn, kategori, antal, enhet, placering, inköpsår, skick,
+dimension, tillverkningsmärke, investeringsbehov, prioritet, pris/enhet,
+summa och anteckning.
+
+* **Excel** (.xlsx) — talen ligger som tal, kolumnrubriken är fryst och det
+  går att filtrera.
+* **CSV** — semikolon och UTF-8, för den som hellre jobbar i ett annat program.
+
+Filen hamnar i `data/export/`.
+
+## Dela med yrkesläraren
+
+Fliken **Kalkylark** har ett färdigskrivet brev: skola, program, antal
+föremål och sista datum fylls i automatiskt. Ändra mottagare och text om du
+vill, tryck sedan **Skicka**. Ingenting skickas förrän du bekräftar i rutan
+som kommer.
+
+## Inför v43
+
+Sista datum räknas fram automatiskt till **tisdagen i vecka 43** (VVS träffas
+tors–fre v43, så arket behöver vara klart innan). Datumet går att ändra under
+Inställningar, och nedräkningen visas i appen.
+
+## Säkerheten
+
+Appen **raderar inte och skickar inte** något på egen hand. Radering och
+utskick kräver att du bekräftar i en ruta. Alla bilder stannar på datorn —
+bildanalysen körs lokalt i Ollama, inga foton lämnar maskinen.
+
+## Om AI:n
+
+Bildanalysen använder en lokal bildmodell (`qwen2.5vl:3b` som standard).
+Saknas modellen fungerar appen ändå: bilden sparas och du fyller i fälten
+själv. Modellen hittar inte på märken eller dimensioner den inte ser, och
+sätter aldrig ett pris.
+
+Hämta modellen med:
+
+    ollama pull qwen2.5vl:3b
+
+## Inställningar
+
+Skola, program, ansvarig lärare och sista datum. Sparas i `config.json`.
+Programmet ärvs automatiskt av nya föremål.
+
+## Filer
+
+| Fil | Innehåll |
+|---|---|
+| `server.py` | Servern, alla sidor och anrop |
+| `lager.py` | Själva inventeringen — läsa, ändra, räkna av, historik |
+| `kalkyl.py` | Bygger kalkylarket (Excel och CSV) |
+| `ai.py` | Bildanalys via Ollama |
+| `epost.py` | Skickar kalkylarket som brev |
+| `index.html` | Hela gränssnittet (telefon och dator) |
+| `data/inventering.json` | Inventeringen och historiken |
+| `data/bilder/` | Fotona |
+| `data/export/` | Exporterade kalkylark |
+| `config.json` | Token, port och uppgifterna om skolan (rättighet 600) |
+
+## Starta om
+
+Har koden ändrats måste servern startas om — den behåller den kod som fanns
+i minnet när den startade:
+
+    vvsinv --omstart
