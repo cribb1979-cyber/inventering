@@ -20,34 +20,40 @@ Det du behöver skaffa under vägen:
 
 ## Steg 1 — Få upp koden på GitHub
 
-Repot `cribb1979-cyber/inventering` finns redan. Då gäller det bara att få
-koden dit.
+Allt är förberett lokalt: koden är committad, och repoadressen är redan
+inlaggad som `origin`. Det enda som fattas är att du loggar in en gång.
 
-1. Öppna en terminal i mappen med appen.
-2. Kontrollera att inga hemligheter följer med. Kommandot ska svara *inget*:
+**Kör det här själv i en terminal** — inloggningen kräver att du svarar i en
+webbläsare, så den kan inte göras automatiskt:
 
-   ```bash
-   cd ~/vvs-inventering
-   git status --short | grep -E "config\.json|\.env$"
-   ```
+```bash
+gh auth login
+```
 
-   Får du träff: lägg till filen i `.gitignore` först. `config.json` innehåller
-   token och får aldrig hamna på GitHub. (`.gitignore` är redan inställd på
-   att skydda den — det här är bara en extra kontroll.)
-3. Logga in och skicka upp:
+Välj: **GitHub.com** → **HTTPS** → **Login with a web browser**. Kopiera
+engångskoden du får och klistra in den på sidan som öppnas.
 
-   ```bash
-   gh auth login          # GitHub.com -> HTTPS -> logga in i webbläsaren
-   cd ~/vvs-inventering
-   git remote -v          # står det inget här? kör raden under:
-   git remote add origin https://github.com/cribb1979-cyber/inventering.git
-   git add -A
-   git commit -m "SYS.VVS — inventering, klar för drift"
-   git push -u origin main
-   ```
+Sedan skickar du upp koden:
 
-   Har du inte `gh`: skapa ett tomt repo på github.com och använd samma
-   `git remote add` + `git push`.
+```bash
+cd ~/vvs-inventering
+git add -A
+git commit -m "Förberett för drift: flyttbar lagring, moln-AI, deploymentfiler"
+git push -u origin main
+```
+
+> **Repot är publikt.** Vem som helst kan läsa koden. Det som ligger där är
+> bara programmet — ingen inventering, inga foton och inga lösenord. Ändå
+> värt att veta. Vill du ha det privat i stället: gå till repot på GitHub →
+> **Settings** → längst ner → **Change visibility** → *Make private*. Render
+> kan publicera från ett privat repo också, men då måste du ge Render
+> åtkomst till det (Render frågar om det när du väljer repot).
+
+Efter `git push` kan du kontrollera att ingenting känsligt följde med:
+
+```bash
+git ls-files | grep -E "config\.json|\.env$"     # ska svara inget
+```
 
 > **Netlify bygger på samma repo.** Netlify försöker bygga varje gång du
 > pushar, och det kommer att misslyckas — det är väntat, för Netlify kan inte
