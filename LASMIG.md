@@ -57,6 +57,10 @@ Adressen innehåller en token. Utan token nekar servern allt utifrån; från
 datorn (127.0.0.1) behövs ingen. Token ligger i `config.json` (rättighet 600)
 och skickas aldrig vidare någon annanstans.
 
+Kör appen i molnet (se `DEPLOY.md`) räknas inte datorn som lokal: där klistrar
+du in nyckeln en gång i rutan **Koppla ihop appen** i stället. QR-koden ritas
+sedan på **Kalkyl**-sidan, och telefonens kamera gör resten.
+
 > Behöver telefonen fungera även när datorn är avstängd, eller utanför
 > skolans nätverk? Då ska appen ligga på en server i stället. Se
 > **`DEPLOY.md`** — där står hela vägen steg för steg. Det som ändras då är

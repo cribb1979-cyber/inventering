@@ -257,16 +257,31 @@ def skriv_config(cfg):
         pass
 
 
+def _utan_fragedel(a):
+    """Tar bort ?… ur en rad som ska loggas, så att nyckeln inte skrivs ut."""
+    if not isinstance(a, str) or "?" not in a:
+        return a
+    i = a.find("?")
+    j = a.find(" ", i)
+    return a[:i] + (a[j:] if j > -1 else "")
+
+
 class Svar(BaseHTTPRequestHandler):
     server_version = "SYS.VVS/1.0"
     protocol_version = "HTTP/1.1"
 
     # ---------------------------------------------------------------- hjälpare
     def log_message(self, fmt, *args):
-        """Bara avvikelser loggas — annars dränks allt av /api/status."""
+        """Bara avvikelser loggas — annars dränks allt av /api/status.
+
+        Frågedelen klipps bort med flit. QR-koden hämtas med nyckeln i
+        adressen (?t=…), och den har inte i en loggfil att göra — varken på
+        datorn eller i molnet."""
         if self.path.startswith("/api/status") or self.path.startswith("/bilder/"):
             return
-        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+        sys.stderr.write("%s - %s\n" % (
+            self.address_string(),
+            fmt % tuple(_utan_fragedel(a) for a in args)))
 
     def _send(self, kod, kropp, typ="application/json; charset=utf-8", extra=None):
         if isinstance(kropp, str):
@@ -350,6 +365,16 @@ class Svar(BaseHTTPRequestHandler):
             pass
 
     # ---------------------------------------------------------------- GET
+    def do_HEAD(self):
+        """Svar på HEAD. Render kollar att tjänsten lever med HEAD /, och utan
+        den här metoden svarade servern 501 — vilket i driftsloggen ser ut som
+        ett fel, fast allt var bra."""
+        v = urllib.parse.urlparse(self.path).path
+        self.send_response(200 if v in ("/", "/index.html") else 404)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         v = u.path

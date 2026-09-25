@@ -107,28 +107,34 @@ https://sysvvs-inventering.onrender.com
 
 ---
 
-## Steg 4 — Öppna på telefonen
+## Steg 4 — Koppla ihop datorn och telefonen
 
-Adressen behöver token på slutet. Skriv i telefonens webbläsare:
+Öppna adressen **på datorn** (utan något på slutet):
 
 ```
-https://sysvvs-inventering.onrender.com/?t=DIN-TOKEN
+https://sysvvs-inventering.onrender.com
 ```
 
-1. Sidan öppnas. Kontrollera att inventeringen syns.
-2. Lägg sidan på hemskärmen:
+1. Högst upp ligger rutan **Koppla ihop appen**. Klistra in `VVS_TOKEN` —
+   samma sträng som du skrev i Render under *Environment* — och tryck
+   **Lås upp**. Nyckeln sparas bara i den webbläsaren och skickas bara till
+   appens egen server.
+2. Gå till **Kalkyl**. Där ritas en **QR-kod**.
+3. Scanna koden med telefonens kamera. Sidan öppnas med nyckeln ifylld.
+4. Lägg sidan på hemskärmen:
    * **iPhone:** dela-ikonen → *Lägg till på hemskärmen*
    * **Android:** de tre prickarna → *Lägg till på startskärmen*
-3. Klart. Därifrån öppnas den som en app, med token redan ifylld.
 
-Öppna samma adress på datorn. Nu ser telefonen och datorn **samma
-inventering** — det du fotar i verkstaden kan du städa upp i efterhand vid
-skrivbordet.
+Klart. Telefonen och datorn ser **samma inventering** — det du fotar i
+verkstaden städar du upp vid skrivbordet.
 
-> **Viktigt:** eftersom `VVS_KRAV_TOKEN=1` krävs token även från datorn i
+> **Viktigt:** med `VVS_KRAV_TOKEN=1` krävs nyckeln även från datorn i
 > molnet. Det är med flit — annars skulle appen se alla besök som "lokala"
-> och släppa in vem som helst. Bokmärk adressen *med* `?t=...` på båda
-> enheterna.
+> och släppa in vem som helst. På datorn behövs den bara en gång.
+
+> QR-koden kan bara ritas av en sida som redan är upplåst, eftersom koden
+> innehåller nyckeln. Därför står det "Sidan är öppen utan nyckel" i rutan
+> ovan tills du klistrat in den.
 
 ---
 
@@ -154,7 +160,9 @@ monterad — då är `VVS_DATA` fel inställd.
 
 | Symptom | Orsak | Åtgärd |
 |---|---|---|
-| "ogiltig eller saknad token" | token fattas eller är fel i adressen | lägg till `?t=DIN-TOKEN` på slutet, exakt som du skrev den i Render |
+| Rutan **Koppla ihop appen** syns | sidan saknar nyckel | klistra in `VVS_TOKEN` från Render → *Environment* och tryck **Lås upp** |
+| "Nyckeln stämmer inte" | fel sträng inklistrad | klistra in den igen, exakt som i Render (inga mellanslag) |
+| QR-koden syns inte | sidan är inte upplåst, eller servern kan inte rita koder | kolla att rutan **Koppla ihop appen** är borta; `curl -I <adress>` visar rubriken `X-SYSVVS-QR: ja` |
 | Allt försvinner vid omstart | disken är inte monterad | kontrollera att `VVS_DATA=/var/data` och att disken står under **Disks** med samma sökväg |
 | Bildanalysen svarar "ingen bildmodell" | nyckeln saknas eller är fel | kontrollera `VVS_AI_NYCKEL` under Environment |
 | Analysen svarar 400/403 | nyckeln avvisas | skapa en ny nyckel på aistudio.google.com |

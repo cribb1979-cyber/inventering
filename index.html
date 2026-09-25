@@ -148,6 +148,21 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
 </header>
 
 <main>
+  <!-- ÖPPEN UTAN NYCKEL — visas bara när sidan saknar nyckel, för utan den
+       svarar servern 401 på allt och appen skulle stå tom utan förklaring. -->
+  <div class="kort" id="koppla" hidden>
+    <div class="namn">Koppla ihop appen</div>
+    <div class="meta"><b id="koppla-rubrik">Sidan är öppen utan nyckel.</b>
+      Nyckeln finns i Render under <code>Environment</code> → <code>VVS_TOKEN</code>
+      (på datorn: <code>config.json</code>). Den sparas bara i den här webbläsaren
+      och skickas bara till appens egen server.</div>
+    <div style="display:flex;gap:7px;margin-top:10px">
+      <input id="nyckel" type="password" placeholder="nyckeln" autocomplete="off"
+             autocapitalize="off" spellcheck="false" style="flex:1;min-width:0">
+      <button class="knapp prim" id="spara-nyckel" style="flex:0 0 auto">Lås upp</button>
+    </div>
+  </div>
+
   <!-- INVENTERING -->
   <section class="vy pa" id="v-inventering">
     <div class="tabbar" id="filter"></div>
@@ -268,11 +283,11 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <div class="namn">Koppla telefonen</div>
       <div class="meta">Samma inventering, samma server — allt du gör i telefonen syns direkt på datorn.</div>
       <div style="text-align:center;margin-top:11px">
-        <img id="qr" alt="QR-kod" onerror="this.hidden=true;document.getElementById('qrfel').hidden=false"
+        <img id="qr" alt="QR-kod" onerror="this.hidden=true"
              style="width:190px;height:190px;background:#fff;border-radius:11px;padding:7px">
       </div>
-      <div class="tyst" id="qrfel" hidden style="text-align:center;margin-top:7px">Kunde inte hämta QR-koden. Skriv in adressen nedan i telefonen i stället.</div>
       <div class="tyst" id="mobilurl" style="text-align:center;margin-top:7px;word-break:break-all"></div>
+
     </div>
   </section>
 
@@ -301,6 +316,25 @@ if (P.get("t")) { localStorage.setItem("vvs-token", P.get("t"));
   history.replaceState(null, "", location.pathname); }
 const TOKEN = localStorage.getItem("vvs-token") || "";
 
+/* Utan nyckel går ingenting att hämta: servern svarar 401 på allt. I stället
+   för en rad röda felmeddelanden (och en QR-kod som aldrig kan ritas — den
+   byggs av nyckeln) visas en ruta där nyckeln kan klistras in. Samma skript
+   körs på telefonen, så rutan dyker upp där den behövs.
+
+   Nyckeln läggs i webbläsarens eget minne (localStorage) och lämnar aldrig
+   den här sidan: den skickas bara till appens egen server, i huvudet
+   X-Token — aldrig i adressen (utom första gången telefonen kommer in via
+   QR-koden, och då plockas den bort ur adressfältet direkt). */
+function visaKoppla(rubrik) {
+  $("#koppla").hidden = false;
+  if (rubrik) $("#koppla-rubrik").textContent = rubrik;
+  $("#qr").hidden = true;
+  $("#mobilurl").textContent = "QR-koden ritas så snart appen är upplåst.";
+  $("#status").textContent = "nyckel behövs";
+  $("#prick").className = "punkt vantar";
+}
+
+
 let DATA = {poster: [], kategorier: [], skick: [], version: 0, bildmodell: null};
 let MODELL = null, VERSION = 0, FILTER = "", SOK = "", VY = "inventering";
 
@@ -310,6 +344,19 @@ const esc = s => String(s == null ? "" : s)
   .replace(/"/g,"&quot;");
 const nummer = n => Number(n) % 1 === 0 ? String(Number(n)) : Number(n).toFixed(1);
 
+/* Nyckeln kan klistras in i rutan högst upp. Lyssnarna kopplas här, efter $
+   — ovanför den finns $ inte än, och då stannar hela skriptet. */
+$("#spara-nyckel").addEventListener("click", () => {
+  const n = $("#nyckel").value.trim();
+  if (!n) { $("#nyckel").focus(); return; }
+  localStorage.setItem("vvs-token", n);
+  location.reload();
+});
+$("#nyckel").addEventListener("keydown", e => {
+  if (e.key === "Enter") $("#spara-nyckel").click();
+});
+let SYNK = 0;
+
 async function api(vag, kropp) {
   const o = {headers: {"X-Token": TOKEN}};
   if (kropp !== undefined) {
@@ -318,7 +365,12 @@ async function api(vag, kropp) {
     o.body = JSON.stringify(kropp);
   }
   const r = await fetch(vag, o);
-  if (r.status === 401) throw new Error("Token stämmer inte. Öppna appen via QR-koden på datorn.");
+  if (r.status === 401) {
+    visaKoppla(TOKEN ? "Nyckeln stämmer inte." : "Sidan är öppen utan nyckel.");
+    throw new Error(TOKEN
+      ? "Nyckeln stämmer inte. Rätta den i rutan ovan."
+      : "Sidan är öppen utan nyckel. Klistra in nyckeln i rutan ovan.");
+  }
   const d = await r.json();
   if (d.fel) throw new Error(d.fel);
   return d;
@@ -888,7 +940,13 @@ function synkaVersion(v) { VERSION = v; $("#synk").textContent = "sparat " + new
 
 async function polla() {
   try {
-    const d = await fetch("/api/status", {headers: {"X-Token": TOKEN}}).then(r => r.json());
+    const svar = await fetch("/api/status", {headers: {"X-Token": TOKEN}});
+    if (svar.status === 401) {     // nyckel saknas eller är fel: fråga inte om
+      visaKoppla(TOKEN ? "Nyckeln stämmer inte." : "Sidan är öppen utan nyckel.");
+      if (SYNK) { clearInterval(SYNK); SYNK = 0; }
+      return;
+    }
+    const d = await svar.json();
     if (d.fel) throw new Error(d.fel);
     $("#prick").className = "punkt";
     MODELL = d.bildmodell;
@@ -934,7 +992,7 @@ async function polla() {
     $("#lista").innerHTML = `<div class="varning fel">${esc(fel.message)}</div>`;
   }
   polla();
-  setInterval(polla, 2000);
+  SYNK = setInterval(polla, 2000);
 })();
 </script>
 </body>
