@@ -4,6 +4,7 @@
 #   vvsinv              öppna appen
 #   vvsinv --omstart    starta om servern så att ändrad kod laddas
 #   vvsinv --qr         skriv ut telefonadressen och en QR-kod i terminalen
+#   vvsinv --nyckel     visa nyckeln (klistras in i Render under VVS_TOKEN)
 #
 # Var appen ligger hittas på tre sätt, i tur och ordning:
 #   1. miljövariabeln VVS_MAPP
@@ -51,13 +52,38 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 1
 fi
 
-OMSTART=0; QR=0
+OMSTART=0; QR=0; NYCKEL=0
 for arg in "$@"; do
     case "$arg" in
         --omstart|omstart) OMSTART=1 ;;
         --qr|qr)           QR=1 ;;
+        --nyckel|nyckel)   NYCKEL=1 ;;
     esac
 done
+
+las_token() {
+    python3 -c "
+import json
+try: print(json.load(open('$KONFIG')).get('token',''))
+except Exception: print('')" 2>/dev/null
+}
+
+# --nyckel skriver bara ut nyckeln, så att den kan klistras in i Render
+# (Environment -> VVS_TOKEN). Servern behöver inte vara igång för det, och
+# nyckeln syns bara på din egen skärm — ingenting hamnar i någon logg.
+if [ "$NYCKEL" = 1 ]; then
+    TOKEN="$(las_token)"
+    if [ -z "$TOKEN" ]; then
+        echo "vvsinv: ingen nyckel i $KONFIG. Starta appen en gång först." >&2
+        exit 1
+    fi
+    echo "Nyckeln till SYS.VVS — klistra in den i Render under VVS_TOKEN:"
+    echo
+    echo "  $TOKEN"
+    echo
+    echo "Telefonen behöver inget: den får nyckeln via QR-koden i Kalkyl."
+    exit 0
+fi
 
 mkdir -p "$MAPP/data/bilder" "$MAPP/data/export"
 
@@ -97,10 +123,7 @@ if ! port_oppen; then
 fi
 
 # 2) telefonadressen
-TOKEN="$(python3 -c "
-import json
-try: print(json.load(open('$KONFIG')).get('token',''))
-except Exception: print('')" 2>/dev/null)"
+TOKEN="$(las_token)"
 MOBIL="http://$(lan_ip):${PORT}"
 [ -n "$TOKEN" ] && MOBIL="$MOBIL/?t=$TOKEN"
 
