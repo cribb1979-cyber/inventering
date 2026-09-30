@@ -136,6 +136,26 @@ def rader(poster, meta=None):
     return rubrikblock(meta or {}), data[0], data[1:], slut
 
 
+def tsv_bytes(poster, meta=None):
+    """Samma innehåll som CSV, men tabbseparerat och utan BOM.
+
+    Är till för att klistra rakt in i Google Kalkylark på en telefon: där finns
+    ingen fil att välja och ingen app att öppna den med — men ett klistrat block
+    hamnar i rätt kolumner direkt.
+    """
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter="\t", lineterminator="\r\n")
+    block, rubrik, data, slut = rader(poster, meta)
+    for rad in block:
+        w.writerow(rad)
+    w.writerow(rubrik)
+    for rad in data:
+        w.writerow(rad)
+    for rad in slut:
+        w.writerow(rad)
+    return buf.getvalue().encode("utf-8")
+
+
 def csv_bytes(poster, meta=None):
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\r\n")
@@ -218,9 +238,14 @@ def xlsx_bytes(poster, meta=None, titel="Inventering"):
                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
                '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
                '</Relationships>')
-    # tre stilar: vanlig, fet (rubrik), stor fet (arkets titel)
+    # tre stilar: vanlig, fet (rubrik), stor fet (arkets titel).
+    # Elementen MÅSTE komma i den ordning standarden föreskriver:
+    # numFmts, fonts, fills, borders, cellStyleXfs, cellXfs, cellStyles, dxfs,
+    # tableStyles. Utan <cellStyles> ("Normal") saknar arket en standardstil —
+    # Excel gissar och öppnar ändå, men Google Kalkylark kan vägra importera.
     styles = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
               '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+              '<numFmts count="0"/>'
               '<fonts count="3">'
               '<font><sz val="11"/><name val="Calibri"/></font>'
               '<font><b/><sz val="11"/><name val="Calibri"/></font>'
@@ -233,7 +258,12 @@ def xlsx_bytes(poster, meta=None, titel="Inventering"):
               '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
               '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
               '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
-              '</cellXfs></styleSheet>')
+              '</cellXfs>'
+              '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+              '<dxfs count="0"/>'
+              '<tableStyles count="0" defaultTableStyle="TableStyleMedium9" '
+              'defaultPivotStyle="PivotStyleLight16"/>'
+              '</styleSheet>')
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:

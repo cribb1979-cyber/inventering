@@ -570,14 +570,18 @@ class Svar(BaseHTTPRequestHandler):
             return
         namn = time.strftime("inventering-%Y-%m-%d")
         meta = ark_meta(las_config())
-        if fmt == "csv":
+        if fmt in ("csv", "tsv"):
             try:
-                data = kalkyl.csv_bytes(poster, meta)
+                data = (kalkyl.tsv_bytes(poster, meta) if fmt == "tsv"
+                        else kalkyl.csv_bytes(poster, meta))
             except Exception as exc:                            # noqa: BLE001
                 self._fel(500, f"kunde inte bygga kalkylarket: {exc}")
                 return
-            self._logg("export", "csv")
-            self._send(200, data, "text/csv; charset=utf-8",
+            self._logg("export", fmt)
+            typ = ("text/tab-separated-values; charset=utf-8" if fmt == "tsv"
+                   else "text/csv; charset=utf-8")
+            # tsv hämtas av sidan och klistras in – den ska inte laddas ner
+            self._send(200, data, typ, {} if fmt == "tsv" else
                        {"Content-Disposition": f'attachment; filename="{namn}.csv"'})
             return
         try:

@@ -106,11 +106,17 @@ platform.openai.com och sätt `VVS_AI_LEVERANTOR=openai`.
    **VVS_MEJL_ADRESS**, **VVS_MEJL_NAMN**, **VVS_MEJL_LOSENORD** — bara om du
    vill kunna trycka **Skicka kalkylarket** inifrån molnet. På datorn lånar
    appen kontot från SYS.ASSIST, men den filen finns inte på servern, så där
-   måste kontot anges. `VVS_MEJL_LOSENORD` är **applösenordet** (16 tecken),
-   inte det vanliga Google-lösenordet — samma som SYS.ASSIST använder.
-   `VVS_MEJL_SMTP_SERVER` och `VVS_MEJL_SMTP_PORT` är redan ifyllda
-   (`smtp.gmail.com`, `465`). Lämnar du de tre tomma fungerar allt utom
-   knappen **Skicka** — då laddar du bara ner arket och bifogar det själv.
+   måste kontot anges. `VVS_MEJL_LOSENORD` är **applösenordet**, inte det
+   vanliga kontolösenordet — samma som SYS.ASSIST använder.
+
+   > **SMTP-servern måste höra till kontot.** Kontot som används är
+   > **Zoho** (`christoffer@yrkesapl.se`), och då ska
+   > `VVS_MEJL_SMTP_SERVER` vara **`smtp.zoho.eu`** — inte Gmail. Är servern
+   > fel svarar appen *"Inloggningen nekades. Använd ett applösenord…"* trots
+   > att både adressen och lösenordet är rätt. `VVS_MEJL_SMTP_PORT` är `465`.
+
+   Lämnar du de tre tomma fungerar allt utom knappen **Skicka** — då laddar du
+   bara ner arket (**Kalkylark → ladda ner**) och bifogar det själv.
 
    > **Finns tjänsten redan?** Render läser `render.yaml` bara när tjänsten
    > *skapas*. Nya variabler lägger du då till själv: **Environment** →

@@ -34,15 +34,20 @@ services:
         sync: false
       # E-post — behövs för att kunna mejla kalkylarket *från molnet*. Det
       # konto som annars lånas från SYS.ASSIST finns bara på datorn, så här
-      # måste det anges en gång. Använd ett applösenord (16 tecken), aldrig
-      # det vanliga Google-lösenordet. Lämnas de tomma går allt utom
-      # "Skicka kalkylarket" som vanligt.
+      # måste det anges en gång. Använd ett applösenord, aldrig det vanliga
+      # kontolösenordet. Lämnas de tomma går allt utom "Skicka kalkylarket"
+      # som vanligt.
+      #
+      # SMTP-SERVERN MÅSTE VARA DEN SOM HÖR TILL KONTOT. Kontot är ett
+      # Zoho-konto (christoffer@yrkesapl.se), alltså smtp.zoho.eu — inte
+      # Gmail. Pekar servern fel blir svaret "Inloggningen nekades" fast
+      # både adress och lösenord är rätt.
       - key: VVS_MEJL_ADRESS
         sync: false
       - key: VVS_MEJL_NAMN
         sync: false
       - key: VVS_MEJL_SMTP_SERVER
-        value: smtp.gmail.com
+        value: smtp.zoho.eu
       - key: VVS_MEJL_SMTP_PORT
         value: "465"
       - key: VVS_MEJL_LOSENORD

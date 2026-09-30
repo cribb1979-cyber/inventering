@@ -243,10 +243,19 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
           <div class="meta">Öppnas i LibreOffice/Excel på datorn</div></div>
       </div>
       <div style="display:flex;gap:9px;margin-top:11px;flex-wrap:wrap">
-        <button class="knapp prim" id="ex-xlsx" style="flex:1;min-width:150px">⬇ Kalkylark (.xlsx)</button>
+        <button class="knapp prim" id="ex-klipp" style="flex:1;min-width:150px">📋 Kopiera till Kalkylark</button>
+        <button class="knapp flat" id="ex-xlsx" style="flex:1;min-width:150px">⬇ Kalkylark (.xlsx)</button>
         <button class="knapp flat" id="ex-csv" style="flex:1;min-width:150px">⬇ Kommaseparerad (.csv)</button>
       </div>
-      <div class="tyst" style="margin-top:9px">Sparas även i <code>data/export/</code> på datorn.</div>
+      <div class="tyst" id="ex-info" style="margin-top:9px">
+        <b>Till Google Kalkylark på telefonen:</b> tryck <b>📋 Kopiera till Kalkylark</b>,
+        öppna sedan ett tomt ark i Google Kalkylark, håll in i cell <b>A1</b> och välj
+        <b>Klistra in</b> — då hamnar allt i rätt kolumner utan att någon fil behöver väljas.<br>
+        Laddar du ner <b>.csv</b> i stället: i Kalkylark, <b>Arkiv → Importera → Ladda upp</b>.
+        <b>.xlsx</b> öppnas av Excel eller LibreOffice — på telefonen krävs appen
+        <b>Google Kalkylark</b> (annars frågar telefonen vilken app som ska öppna filen).
+        Filerna sparas även i <code>data/export/</code> på datorn.
+      </div>
     </div>
     <div class="kort">
       <div class="namn">Sammanställning</div>
@@ -872,10 +881,63 @@ async function laddaLogg() {
 /* ---------------------------------------------------------------- export */
 $("#ex-xlsx").addEventListener("click", () => exportera("xlsx"));
 $("#ex-csv").addEventListener("click", () => exportera("csv"));
-function exportera(fmt) {
-  const d = DATA.poster.length;
-  if (!d) { alert("Inventeringen är tom."); return; }
-  location.href = `/api/kalkyl?format=${fmt}&t=${encodeURIComponent(TOKEN)}`;
+$("#ex-klipp").addEventListener("click", async () => {
+  if (!DATA.poster.length) { alert("Inventeringen är tom."); return; }
+  const k = $("#ex-klipp"), text = k.textContent;
+  k.disabled = true; k.textContent = "kopierar…";
+  try {
+    const r = await fetch(`/api/kalkyl?format=tsv&t=${encodeURIComponent(TOKEN)}`);
+    if (!r.ok) { alert(`Kunde inte bygga filen (HTTP ${r.status}).`); return; }
+    const txt = await r.text();
+    let klistrat = false;
+    try { await navigator.clipboard.writeText(txt); klistrat = true; } catch (e) { /* reservväg nedan */ }
+    if (!klistrat) {
+      // Äldre/otillåtna webbläsare: markera en osynlig ruta och kopiera den.
+      const ta = document.createElement("textarea");
+      ta.value = txt;
+      ta.style.position = "fixed"; ta.style.top = "-1000px"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try { klistrat = document.execCommand("copy"); } catch (e) { klistrat = false; }
+      ta.remove();
+    }
+    $("#ex-info").innerHTML = klistrat
+      ? "✓ <b>Kopierat!</b> Öppna <b>Google Kalkylark</b> → skapa ett tomt ark → håll in i cell <b>A1</b> → <b>Klistra in</b>."
+      : 'Kunde inte kopiera automatiskt i den här webbläsaren. Ladda ner <b>.csv</b> och importera den i stället (Arkiv → Importera).';
+  } catch (fel) {
+    alert("Kunde inte kopiera: " + (fel.message || fel));
+  } finally {
+    k.disabled = false; k.textContent = text;
+  }
+});
+async function exportera(fmt) {
+  if (!DATA.poster.length) { alert("Inventeringen är tom."); return; }
+  const knapp = fmt === "csv" ? $("#ex-csv") : $("#ex-xlsx");
+  const text = knapp.textContent;
+  knapp.disabled = true; knapp.textContent = "bygger filen…";
+  try {
+    // Hämta filen själva i stället för att navigera till adressen. Då syns ett
+    // fel (tom inventering, serverfel) som ett begripligt besked – förut bytte
+    // webbläsaren bara sida och ingenting hände.
+    const r = await fetch(`/api/kalkyl?format=${fmt}&t=${encodeURIComponent(TOKEN)}`);
+    if (!r.ok) {
+      let m = `kunde inte bygga filen (HTTP ${r.status})`;
+      try { const d = await r.json(); if (d && d.fel) m = d.fel; } catch (e) {}
+      alert(m);
+      return;
+    }
+    const blob = await r.blob();
+    if (!blob.size) { alert("Filen blev tom – försök igen."); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `inventering-${new Date().toISOString().slice(0, 10)}.${fmt}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (fel) {
+    alert("Kunde inte ladda ner: " + (fel.message || fel));
+  } finally {
+    knapp.disabled = false; knapp.textContent = text;
+  }
 }
 
 /* ------------------------------------------------------- uppgifter + utskick */
